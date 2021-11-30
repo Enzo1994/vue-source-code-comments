@@ -20,7 +20,7 @@
           '<button v-on:click="count++">You clicked me {{ count }} times.</button>',
       });
       const vm = new Vue({
-        template: "<div>{{abc}}<Comp /></div>",
+        template: "<div><Comp /><div :alt='abc'>3</div><div>{{abc}}</div></div>",
         el: "#app",
         data: {
           abc: 123,

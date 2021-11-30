@@ -2810,6 +2810,7 @@
   /**
    * Runtime helper for rendering static trees.
    */
+  // 静态节点缓存树
   function renderStatic (
     index,
     isInFor
@@ -3998,23 +3999,6 @@
     vm.$el = el;
     if (!vm.$options.render) {
       vm.$options.render = createEmptyVNode;
-      {
-        /* istanbul ignore if */
-        if ((vm.$options.template && vm.$options.template.charAt(0) !== '#') ||
-          vm.$options.el || el) {
-          warn(
-            'You are using the runtime-only build of Vue where the template ' +
-            'compiler is not available. Either pre-compile the templates into ' +
-            'render functions, or use the compiler-included build.',
-            vm
-          );
-        } else {
-          warn(
-            'Failed to mount component: template or render function not defined.',
-            vm
-          );
-        }
-      }
     }
     callHook(vm, 'beforeMount');
 
@@ -8995,35 +8979,8 @@
     el,
     hydrating
   ) {
-    el = el && inBrowser ? query(el) : undefined;
-    return mountComponent(this, el, hydrating)
+    return mountComponent(this, query(el), hydrating)
   };
-
-  // devtools global hook
-  /* istanbul ignore next */
-  if (inBrowser) {
-    setTimeout(function () {
-      if (config.devtools) {
-        if (devtools) {
-          devtools.emit('init', Vue);
-        } else {
-          console[console.info ? 'info' : 'log'](
-            'Download the Vue Devtools extension for a better development experience:\n' +
-            'https://github.com/vuejs/vue-devtools'
-          );
-        }
-      }
-      if (config.productionTip !== false &&
-        typeof console !== 'undefined'
-      ) {
-        console[console.info ? 'info' : 'log'](
-          "You are running Vue in development mode.\n" +
-          "Make sure to turn on production mode when deploying for production.\n" +
-          "See more tips at https://vuejs.org/guide/deployment.html"
-        );
-      }
-    }, 0);
-  }
 
   /*  */
 
@@ -10231,6 +10188,7 @@
       value = list[i].value;
       if (dirRE.test(name)) {
         // mark element as dynamic
+        debugger
         el.hasBindings = true;
         // modifiers
         modifiers = parseModifiers(name.replace(dirRE, ''));
@@ -10574,13 +10532,14 @@
     if (!root) { return }
     isStaticKey = genStaticKeysCached(options.staticKeys || '');
     isPlatformReservedTag = options.isReservedTag || no;
+    debugger
     // first pass: mark all non-static nodes.
     markStatic$1(root);
     // second pass: mark static roots.
     markStaticRoots(root, false);
   }
 
-  function genStaticKeys$1 (keys) {
+  function  genStaticKeys$1 (keys) {
     return makeMap(
       'type,tag,attrsList,attrsMap,plain,parent,children,attrs,start,end,rawAttrsMap' +
       (keys ? ',' + keys : '')
@@ -10594,9 +10553,9 @@
       // 1. components not able to mutate slot nodes
       // 2. static slot content fails for hot-reloading
       if (
-        !isPlatformReservedTag(node.tag) &&
-        node.tag !== 'slot' &&
-        node.attrsMap['inline-template'] == null
+        !isPlatformReservedTag(node.tag) &&  // 非浏览器保留标签
+        node.tag !== 'slot' && // 不是slot
+        node.attrsMap['inline-template'] == null // 非行内私有组件
       ) {
         return
       }
@@ -10627,6 +10586,8 @@
       // For a node to qualify as a static root, it should have children that
       // are not just static text. Otherwise the cost of hoisting out will
       // outweigh the benefits and it's better off to just always render it fresh.
+      // 静态节点收集
+      debugger
       if (node.static && node.children.length && !(
         node.children.length === 1 &&
         node.children[0].type === 3
@@ -10656,13 +10617,14 @@
     if (node.type === 3) { // text
       return true
     }
-    return !!(node.pre || (
-      !node.hasBindings && // no dynamic bindings
+    debugger
+    return !!(node.pre || (  // 是否是 v-pre ，跳过编译直接展示节点
+      !node.hasBindings && // no dynamic bindings （没有动态绑定attr，也就是非v-,:,@,#开头）
       !node.if && !node.for && // not v-if or v-for or v-else
-      !isBuiltInTag(node.tag) && // not a built-in
-      isPlatformReservedTag(node.tag) && // not a component
-      !isDirectChildOfTemplateFor(node) &&
-      Object.keys(node).every(isStaticKey)
+      !isBuiltInTag(node.tag) && // not a built-in （不是slot、component节点）
+      isPlatformReservedTag(node.tag) && // not a component （是html保留和svg节点）
+      !isDirectChildOfTemplateFor(node) &&  // 排除父节点是 template + for 节点
+      Object.keys(node).every(isStaticKey)  //       'type,tag,attrsList,attrsMap,plain,parent,children,attrs,start,end,rawAttrsMap' 这些属性都有值
     ))
   }
 
@@ -10941,6 +10903,7 @@
 
   // hoist static sub-trees out
   function genStatic (el, state) {
+    debugger
     el.staticProcessed = true;
     // Some elements (templates) need to behave differently inside of a v-pre
     // node.  All pre nodes are static roots, so we can use this as a location to
@@ -11609,7 +11572,7 @@
   }
 
   function createCompileToFunctionFn (compile) {
-    var cache = Object.create(null); // 每个模板的字符串都会被缓存
+    // var cache = Object.create(null); // 每个模板的字符串都会被缓存
     /**
      * 返回值：
      * {
@@ -11623,14 +11586,6 @@
     ) {
       options = extend({}, options);
 
-      // check cache
-      var key = options.delimiters
-        ? String(options.delimiters) + template
-        : template;
-      if (cache[key]) {
-        return cache[key]
-      }
-
       // compile
       var compiled = compile(template, options);
 
@@ -11640,8 +11595,8 @@
       res.staticRenderFns = compiled.staticRenderFns.map(function (code) {
         return  new Function(code)
       });
-      debugger
-      return (cache[key] = res)
+      
+      return res
     }
   }
 
@@ -11771,14 +11726,6 @@
     hydrating
   ) {
     el = el && query(el);
-
-    /* istanbul ignore if */
-    if (el === document.body || el === document.documentElement) {
-      warn(
-        "Do not mount Vue to <html> or <body> - mount to normal elements instead."
-      );
-      return this
-    }
 
     var options = this.$options;
     // resolve template/el and convert to render function
