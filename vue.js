@@ -3069,7 +3069,6 @@
     );
 
     var vnode = options.render.call(null, renderContext._c, renderContext);
-
     if (vnode instanceof VNode) {
       return cloneAndMarkFunctionalResult(vnode, data, renderContext.parent, options, renderContext)
     } else if (Array.isArray(vnode)) {
@@ -3553,6 +3552,7 @@
       // when parent component is patched.
       currentRenderingInstance = vm;
       var vnode = render.call(vm._renderProxy, vm.$createElement);
+      debugger
       currentRenderingInstance = null;
       // if the returned array contains only a single node, allow it
       if (Array.isArray(vnode) && vnode.length === 1) {
@@ -6399,7 +6399,7 @@
         if (isDef(oldVnode)) { invokeDestroyHook(oldVnode); }
         return
       }
-
+      debugger
       var isInitialPatch = false;
       var insertedVnodeQueue = [];
 
@@ -10188,7 +10188,6 @@
       value = list[i].value;
       if (dirRE.test(name)) {
         // mark element as dynamic
-        debugger
         el.hasBindings = true;
         // modifiers
         modifiers = parseModifiers(name.replace(dirRE, ''));
@@ -10532,7 +10531,6 @@
     if (!root) { return }
     isStaticKey = genStaticKeysCached(options.staticKeys || '');
     isPlatformReservedTag = options.isReservedTag || no;
-    debugger
     // first pass: mark all non-static nodes.
     markStatic$1(root);
     // second pass: mark static roots.
@@ -10586,8 +10584,6 @@
       // For a node to qualify as a static root, it should have children that
       // are not just static text. Otherwise the cost of hoisting out will
       // outweigh the benefits and it's better off to just always render it fresh.
-      // 静态节点收集
-      debugger
       if (node.static && node.children.length && !(
         node.children.length === 1 &&
         node.children[0].type === 3
@@ -10617,7 +10613,6 @@
     if (node.type === 3) { // text
       return true
     }
-    debugger
     return !!(node.pre || (  // 是否是 v-pre ，跳过编译直接展示节点
       !node.hasBindings && // no dynamic bindings （没有动态绑定attr，也就是非v-,:,@,#开头）
       !node.if && !node.for && // not v-if or v-for or v-else
@@ -10903,7 +10898,6 @@
 
   // hoist static sub-trees out
   function genStatic (el, state) {
-    debugger
     el.staticProcessed = true;
     // Some elements (templates) need to behave differently inside of a v-pre
     // node.  All pre nodes are static roots, so we can use this as a location to
@@ -11725,6 +11719,7 @@
     el,
     hydrating
   ) {
+    debugger
     el = el && query(el);
 
     var options = this.$options;
@@ -11752,7 +11747,6 @@
           delimiters: options.delimiters,
           comments: options.comments
         }, this);
-        console.log(ref)
         var render = ref.render;
         var staticRenderFns = ref.staticRenderFns;
         options.render = render;

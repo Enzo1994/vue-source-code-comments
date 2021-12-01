@@ -17,13 +17,22 @@
           };
         },
         template:
-          '<button v-on:click="count++">You clicked me {{ count }} times.</button>',
+          '<div><button v-on:click="count++">You clicked me {{ count }} times.</button><slot></slot></div>',
       });
       const vm = new Vue({
-        template: "<div><Comp /><div :alt='abc'>3</div><div>{{abc}}</div></div>",
+        template: 
+        `<div>
+          <Comp><div>666</div></Comp>
+          <div :alt='abc'>3</div>
+          <div>{{abc}}<div>999<div>111</div></div></div>
+          <div>999<div>111</div></div>
+        </div>`,
         el: "#app",
         data: {
           abc: 123,
+        },
+        mounted(){
+          this.abc = 3
         },
         components: {
             Comp
