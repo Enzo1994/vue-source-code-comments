@@ -1044,7 +1044,7 @@
       
         var value = getter ? getter.call(obj) : val;
         if (Dep.target) {
-          dep.depend();
+           Dep.target.addDep(dep) // dep.depend();
           if (childOb) {
             childOb.dep.depend();
             if (Array.isArray(value)) {
@@ -3552,7 +3552,6 @@
       // when parent component is patched.
       currentRenderingInstance = vm;
       var vnode = render.call(vm._renderProxy, vm.$createElement);
-      debugger
       currentRenderingInstance = null;
       // if the returned array contains only a single node, allow it
       if (Array.isArray(vnode) && vnode.length === 1) {
@@ -4387,21 +4386,13 @@
     this.newDepIds = new _Set();
     this.expression = expOrFn.toString();
     // parse expression for getter
+    // 存下 getter
     if (typeof expOrFn === 'function') {
-      this.getter = expOrFn;
+      this.getter = expOrFn; // computed 传入的那个函数
     } else {
       this.getter = parsePath(expOrFn);
-      if (!this.getter) {
-        this.getter = noop;
-        warn(
-          "Failed watching path: \"" + expOrFn + "\" " +
-          'Watcher only accepts simple dot-delimited paths. ' +
-          'For full control, use a function instead.',
-          vm
-        );
-      }
     }
-    this.value = this.lazy
+    this.value = this.lazy  // 如果 lazy 的话，new Watcher 的时候不收集依赖先
       ? undefined
       : this.get();
   };
@@ -4411,25 +4402,15 @@
    */
   Watcher.prototype.get = function get () {
     pushTarget(this);
-    var value;
     var vm = this.vm;
-    try {
-      value = this.getter.call(vm, vm);
-    } catch (e) {
-      if (this.user) {
-        handleError(e, vm, ("getter for watcher \"" + (this.expression) + "\""));
-      } else {
-        throw e
-      }
-    } finally {
-      // "touch" every property so they are all tracked as
-      // dependencies for deep watching
-      if (this.deep) {
-        traverse(value);
-      }
-      popTarget();
-      this.cleanupDeps();
+    var value = this.getter.call(vm, vm);
+    // "touch" every property so they are all tracked as
+    // dependencies for deep watching
+    if (this.deep) {
+      traverse(value);
     }
+    popTarget();
+    this.cleanupDeps();
     return value
   };
 
@@ -4501,15 +4482,7 @@
         // set new value
         var oldValue = this.value;
         this.value = value;
-        if (this.user) {
-          try {
-            this.cb.call(this.vm, value, oldValue);
-          } catch (e) {
-            handleError(e, this.vm, ("callback for watcher \"" + (this.expression) + "\""));
-          }
-        } else {
-          this.cb.call(this.vm, value, oldValue);
-        }
+        this.cb.call(this.vm, value, oldValue);
       }
     }
   };
@@ -4695,41 +4668,28 @@
   function initComputed (vm, computed) {
     // $flow-disable-line
     var watchers = vm._computedWatchers = Object.create(null);
-    // computed properties are just getters during SSR
-    var isSSR = isServerRendering();
 
     for (var key in computed) {
-      var userDef = computed[key];
-      var getter = typeof userDef === 'function' ? userDef : userDef.get;
-      if (getter == null) {
-        warn(
-          ("Getter is missing for computed property \"" + key + "\"."),
-          vm
-        );
-      }
+      var userDef = computed[key]; // computed函数
+      var getter = typeof userDef === 'function' ? userDef : userDef.get; // 是函数直接取，不是则取 getter
 
-      if (!isSSR) {
-        // create internal watcher for the computed property.
-        watchers[key] = new Watcher(
-          vm,
-          getter || noop,
-          noop,
-          computedWatcherOptions
-        );
-      }
+      // create internal watcher for the computed property.
 
-      // component-defined computed properties are already defined on the
-      // component prototype. We only need to define computed properties defined
-      // at instantiation here.
+      // 创建一个computed watcher，存入组件实例的 watchers 内
+      // 通过 lazy flag，告诉这个 watcher ，new 的时候不立刻求值
+      watchers[key] = new Watcher(
+        vm,
+        getter || noop,
+        noop,
+        { lazy: true } // computedWatcherOptions
+      );
+      
+
+      // component-defined computed properties are already defined on the component prototype. 
+      // We only need to define computed properties defined at instantiation here.
       if (!(key in vm)) {
         defineComputed(vm, key, userDef);
-      } else {
-        if (key in vm.$data) {
-          warn(("The computed property \"" + key + "\" is already defined in data."), vm);
-        } else if (vm.$options.props && key in vm.$options.props) {
-          warn(("The computed property \"" + key + "\" is already defined as a prop."), vm);
-        }
-      }
+      } 
     }
   }
 
@@ -4738,31 +4698,23 @@
     key,
     userDef
   ) {
+    var sharedPropertyDefinition = {
+      enumerable: true,
+      configurable: true,
+      get: noop,
+      set: noop
+    };
     var shouldCache = !isServerRendering();
     if (typeof userDef === 'function') {
-      sharedPropertyDefinition.get = shouldCache
-        ? createComputedGetter(key)
-        : createGetterInvoker(userDef);
+      sharedPropertyDefinition.get = createComputedGetter(key)
       sharedPropertyDefinition.set = noop;
     } else {
-      sharedPropertyDefinition.get = userDef.get
-        ? shouldCache && userDef.cache !== false
-          ? createComputedGetter(key)
-          : createGetterInvoker(userDef.get)
-        : noop;
+      sharedPropertyDefinition.get = createComputedGetter(key)
       sharedPropertyDefinition.set = userDef.set || noop;
     }
-    if (sharedPropertyDefinition.set === noop) {
-      sharedPropertyDefinition.set = function () {
-        warn(
-          ("Computed property \"" + key + "\" was assigned to but it has no setter."),
-          this
-        );
-      };
-    }
-    Object.defineProperty(target, key, sharedPropertyDefinition);
+    // 把computed 属性 绑定到实例上 设置setter和getter
+    Object.defineProperty(target /* vm */ , key, sharedPropertyDefinition);
   }
-
   function createComputedGetter (key) {
     return function computedGetter () {
       var watcher = this._computedWatchers && this._computedWatchers[key];
@@ -4814,14 +4766,9 @@
 
   function initWatch (vm, watch) {
     for (var key in watch) {
-      var handler = watch[key];
-      if (Array.isArray(handler)) {
-        for (var i = 0; i < handler.length; i++) {
-          createWatcher(vm, key, handler[i]);
-        }
-      } else {
-        createWatcher(vm, key, handler);
-      }
+      // 省略了处理handler数组
+      const handler = watch[key]
+      createWatcher(vm, key, handler);
     }
   }
 
@@ -4831,13 +4778,40 @@
     handler,
     options
   ) {
+    // 处理带options的情况
     if (isPlainObject(handler)) {
       options = handler;
       handler = handler.handler;
     }
+    // handler 还能是字符串，指定使用 methods 里的方法
     if (typeof handler === 'string') {
       handler = vm[handler];
     }
+
+    Vue.prototype.$watch = function (
+      expOrFn,
+      cb,
+      options
+    ) {
+      var vm = this;
+      options = options || {};
+      options.user = true;
+      /**
+       * 此 watcher：
+       * 1. 触发求值，收集这个watcher的依赖
+       * 2. 数据变化，触发这个watcher
+       */
+      var watcher = new Watcher(vm, expOrFn, cb, options);
+
+      // 如果immediate，就立即执行下这个
+      if (options.immediate) {
+        cb.call(vm, watcher.value);
+      }
+      return function unwatchFn () {
+        watcher.teardown();
+      }
+    };
+    
     return vm.$watch(expOrFn, handler, options)
   }
 
@@ -4873,18 +4847,11 @@
       options
     ) {
       var vm = this;
-      if (isPlainObject(cb)) {
-        return createWatcher(vm, expOrFn, cb, options)
-      }
       options = options || {};
       options.user = true;
       var watcher = new Watcher(vm, expOrFn, cb, options);
       if (options.immediate) {
-        try {
-          cb.call(vm, watcher.value);
-        } catch (error) {
-          handleError(error, vm, ("callback for immediate watcher \"" + (watcher.expression) + "\""));
-        }
+        cb.call(vm, watcher.value);
       }
       return function unwatchFn () {
         watcher.teardown();
@@ -6399,7 +6366,6 @@
         if (isDef(oldVnode)) { invokeDestroyHook(oldVnode); }
         return
       }
-      debugger
       var isInitialPatch = false;
       var insertedVnodeQueue = [];
 
@@ -11719,7 +11685,6 @@
     el,
     hydrating
   ) {
-    debugger
     el = el && query(el);
 
     var options = this.$options;

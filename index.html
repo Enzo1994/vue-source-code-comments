@@ -20,24 +20,54 @@
           '<div><button v-on:click="count++">You clicked me {{ count }} times.</button><slot></slot></div>',
       });
       const vm = new Vue({
-        template: 
-        `<div>
-          <Comp><div>666</div></Comp>
-          <div :alt='abc'>3</div>
-          <div>{{abc}}<div>999<div>111</div></div></div>
-          <div>999<div>111</div></div>
-        </div>`,
+        template: `<div>
+            {{testObj}}
+            <!--
+            <Comp><div>666</div></Comp>
+            <div :alt='abc'>3</div>
+            <div>{{abc}}<div>999<div>111</div></div></div>
+            <div>999<div>111</div></div>
+            -->
+          </div>`,
         el: "#app",
         data: {
-          abc: 123,
+          // abc: 123,
+          obj: { a: 333 },
         },
-        mounted(){
-          this.abc = 3
+        watch:{
+          'obj.a'(val){
+            debugger
+            console.log('watcher',val)
+          }
         },
-        components: {
-            Comp
+        mounted() {
+          // this.abc = 3;
+          // this.abc = 4
+          // setTimeout(() => (this.obj = 888), 10000);
+          // console.log(this)
+          this.obj.a = 888
+          // this.obj = {c:3}
+          // this.a = 66
+
+
         },
+        computed: {
+          // testObj() {
+          //   debugger;
+          //   console.log('computed')
+          //   this.a = 34
+          //   return this.a;
+          // },
+          // testObj2(){
+          //   return this.testObj
+          // }
+        },
+        // components: {
+        //     Comp
+        // },
       });
+
+
     </script>
   </body>
 </html>
