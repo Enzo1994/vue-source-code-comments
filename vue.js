@@ -1912,8 +1912,9 @@
   var callbacks = [];
   var pending = false;
 
+  // 执行所有回调
   function flushCallbacks () {
-    pending = false;
+    pending = false;  // 本次异步队列执行完成
     var copies = callbacks.slice(0);
     callbacks.length = 0;
     for (var i = 0; i < copies.length; i++) {
@@ -1990,17 +1991,15 @@
     var _resolve;
     callbacks.push(function () {
       if (cb) {
-        try {
-          cb.call(ctx);
-        } catch (e) {
-          handleError(e, ctx, 'nextTick');
-        }
+        cb.call(ctx);
       } else if (_resolve) {
         _resolve(ctx);
       }
     });
     if (!pending) {
+      // 如果上次异步队列执行完成，才可以把这次队列加入异步任务
       pending = true;
+      // 本次队列加入到异步任务
       timerFunc();
     }
     // $flow-disable-line
@@ -2153,11 +2152,15 @@
     }
     if (isA) {
       i = val.length;
-      while (i--) { _traverse(val[i], seen); }
+      while (i--) { 
+        _traverse(val[i], seen); 
+      }
     } else {
       keys = Object.keys(val);
       i = keys.length;
-      while (i--) { _traverse(val[keys[i]], seen); }
+      while (i--) { 
+        _traverse(val[keys[i]], seen); 
+      }
     }
   }
 
@@ -3198,12 +3201,6 @@
 
     // if at this stage it's not a constructor or an async component factory,
     // reject.
-    if (typeof Ctor !== 'function') {
-      {
-        warn(("Invalid Component definition: " + (String(Ctor))), context);
-      }
-      return
-    }
 
     // async component
     var asyncFactory;
@@ -3292,7 +3289,7 @@
       options.render = inlineTemplate.render;
       options.staticRenderFns = inlineTemplate.staticRenderFns;
     }
-    return new vnode.componentOptions.Ctor(options)
+    return new vnode.componentOptions.Ctor(options) // 子组件实例化
   }
 
   function installComponentHooks (data) {
@@ -3372,34 +3369,13 @@
     children,
     normalizationType
   ) {
-    if (isDef(data) && isDef((data).__ob__)) {
-      warn(
-        "Avoid using observed data object as vnode data: " + (JSON.stringify(data)) + "\n" +
-        'Always create fresh vnode data objects in each render!',
-        context
-      );
-      return createEmptyVNode()
-    }
     // object syntax in v-bind
     if (isDef(data) && isDef(data.is)) {
       tag = data.is;
     }
-    if (!tag) {
-      // in case of component :is set to falsy value
-      return createEmptyVNode()
-    }
-    // warn against non-primitive key
-    if (isDef(data) && isDef(data.key) && !isPrimitive(data.key)
-    ) {
-      {
-        warn(
-          'Avoid using non-primitive value as key, ' +
-          'use string/number value instead.',
-          context
-        );
-      }
-    }
+    // 校验key是原始类型，warn against non-primitive key
     // support single function children as default scoped slot
+
     if (Array.isArray(children) &&
       typeof children[0] === 'function'
     ) {
@@ -3412,33 +3388,20 @@
     } else if (normalizationType === SIMPLE_NORMALIZE) {
       children = simpleNormalizeChildren(children);
     }
-    var vnode, ns;
+    var vnode // , ns;
     if (typeof tag === 'string') {
       var Ctor;
-      ns = (context.$vnode && context.$vnode.ns) || config.getTagNamespace(tag);
-      if (config.isReservedTag(tag)) {
-        // platform built-in elements
-        if (isDef(data) && isDef(data.nativeOn)) {
-          warn(
-            ("The .native modifier for v-on is only valid on components but it was used on <" + tag + ">."),
-            context
-          );
-        }
+      // ns = (context.$vnode && context.$vnode.ns) || config.getTagNamespace(tag);
+      if (config.isReservedTag(tag)) { 
+        // HTML节点
+        // .native只能作用在组件的事件监听上 platform built-in elements  
         vnode = new VNode(
           config.parsePlatformTagName(tag), data, children,
           undefined, undefined, context
         );
       } else if ((!data || !data.pre) && isDef(Ctor = resolveAsset(context.$options, 'components', tag))) {
-        // component
+        // component 组件
         vnode = createComponent(Ctor, data, context, children, tag);
-      } else {
-        // unknown or unlisted namespaced elements
-        // check at runtime because it may get assigned a namespace when its
-        // parent normalizes children
-        vnode = new VNode(
-          tag, data, children,
-          undefined, undefined, context
-        );
       }
     } else {
       // direct component options / constructor
@@ -3447,7 +3410,7 @@
     if (Array.isArray(vnode)) {
       return vnode
     } else if (isDef(vnode)) {
-      if (isDef(ns)) { applyNS(vnode, ns); }
+      // if (isDef(ns)) { applyNS(vnode, ns); }
       if (isDef(data)) { registerDeepBindings(data); }
       return vnode
     } else {
@@ -3918,6 +3881,7 @@
       // based on the rendering backend used.
       if (!prevVnode) {
         // initial render
+        // 第一次渲染，直接全量添加
         vm.$el = vm.__patch__(vm.$el, vnode, hydrating, false /* removeOnly */);
       } else {
         // updates
@@ -4242,43 +4206,24 @@
     for (index = 0; index < queue.length; index++) {
       watcher = queue[index];
       if (watcher.before) {
-        watcher.before();
+        watcher.before();  // render watcher用，触发beforeUpdate
       }
       id = watcher.id;
       has[id] = null;
       watcher.run();
-      // in dev build, check and stop circular updates.
-      if (has[id] != null) {
-        circular[id] = (circular[id] || 0) + 1;
-        if (circular[id] > MAX_UPDATE_COUNT) {
-          warn(
-            'You may have an infinite update loop ' + (
-              watcher.user
-                ? ("in watcher with expression \"" + (watcher.expression) + "\"")
-                : "in a component render function."
-            ),
-            watcher.vm
-          );
-          break
-        }
-      }
+      // 开发模式检查循环引用，省略，in dev build, check and stop circular updates.
     }
 
     // keep copies of post queues before resetting state
     var activatedQueue = activatedChildren.slice();
     var updatedQueue = queue.slice();
 
-    resetSchedulerState();
+    resetSchedulerState(); // 设置 flushing 为 false，输出结束
 
     // call component updated and activated hooks
     callActivatedHooks(activatedQueue);
     callUpdatedHooks(updatedQueue);
 
-    // devtool hook
-    /* istanbul ignore if */
-    if (devtools && config.devtools) {
-      devtools.emit('flush');
-    }
   }
 
   function callUpdatedHooks (queue) {
@@ -4314,6 +4259,8 @@
    * Push a watcher into the watcher queue.
    * Jobs with duplicate IDs will be skipped unless it's
    * pushed when the queue is being flushed.
+   * 
+   * 把watcher push 进队列，如果本次队列重复，就不添加
    */
   function queueWatcher (watcher) {
     var id = watcher.id;
@@ -4324,16 +4271,24 @@
       } else {
         // if already flushing, splice the watcher based on its id
         // if already past its id, it will be run next immediately.
+
+        /**
+         * 当前正在flushing，
+         * 如果已经过了插入的watcher 的 id，则立即插入到下一个位置
+         * 如果没过插入 watcher 的 id，则插入到升序 ID 大小正确的位置
+         */
         var i = queue.length - 1;
-        while (i > index && queue[i].id > watcher.id) {
+        // index：当前 flush 到了 queue 中的哪个 watcher 了
+        while (i > index && queue[i].id > watcher.id) {  
           i--;
         }
         queue.splice(i + 1, 0, watcher);
       }
       // queue the flush
       if (!waiting) {
-        waiting = true;
-
+        // 防止每次 update 新的 Watcher，都添加 flushSchedulerQueue 到异步任务队列
+        waiting = true; // 攒着，等异步flush队列都执行完了，再一股脑设置上新的异步队列
+        // 队列是动态的，
         if (!config.async) {
           flushSchedulerQueue();
           return
@@ -4613,36 +4568,12 @@
     data = vm._data = typeof data === 'function'
       ? getData(data, vm)
       : data || {};
-    if (!isPlainObject(data)) {
-      data = {};
-      warn(
-        'data functions should return an object:\n' +
-        'https://vuejs.org/v2/guide/components.html#data-Must-Be-a-Function',
-        vm
-      );
-    }
     // proxy data on instance
     var keys = Object.keys(data);
-    var props = vm.$options.props;
-    var methods = vm.$options.methods;
     var i = keys.length;
     while (i--) {
       var key = keys[i];
-      {
-        if (methods && hasOwn(methods, key)) {
-          warn(
-            ("Method \"" + key + "\" has already been defined as a data property."),
-            vm
-          );
-        }
-      }
-      if (props && hasOwn(props, key)) {
-        warn(
-          "The data property \"" + key + "\" is already declared as a prop. " +
-          "Use prop default value instead.",
-          vm
-        );
-      } else if (!isReserved(key)) {
+      if (!isReserved(key)) {
         proxy(vm, "_data", key);
       }
     }
@@ -4704,7 +4635,6 @@
       get: noop,
       set: noop
     };
-    var shouldCache = !isServerRendering();
     if (typeof userDef === 'function') {
       sharedPropertyDefinition.get = createComputedGetter(key)
       sharedPropertyDefinition.set = noop;
@@ -4722,20 +4652,15 @@
         if (watcher.dirty) {
           watcher.evaluate();
         }
-        if (Dep.target) {
+        // 此时render watcher处在取值阶段，所以这个就是render watcher
+        // 收集当前watcher到render watcher的 依赖dep列表
+        if (Dep.target) { 
           watcher.depend();
         }
         return watcher.value
       }
     }
   }
-
-  function createGetterInvoker(fn) {
-    return function computedGetter () {
-      return fn.call(this, this)
-    }
-  }
-
   function initMethods (vm, methods) {
     var props = vm.$options.props;
     for (var key in methods) {
@@ -5959,9 +5884,11 @@
     }
 
     function isPatchable (vnode) {
+      // TODO: 验证这里是否是组件的根元素
       while (vnode.componentInstance) {
         vnode = vnode.componentInstance._vnode;
       }
+      // 普通ul节点，直接返回isDef(vnode.tag)
       return isDef(vnode.tag)
     }
 
@@ -6067,13 +5994,17 @@
 
     function updateChildren (parentElm, oldCh, newCh, insertedVnodeQueue, removeOnly) {
       var oldStartIdx = 0;
-      var newStartIdx = 0;
-      var oldEndIdx = oldCh.length - 1;
       var oldStartVnode = oldCh[0];
+
+      var oldEndIdx = oldCh.length - 1;
       var oldEndVnode = oldCh[oldEndIdx];
-      var newEndIdx = newCh.length - 1;
+
+      var newStartIdx = 0;
       var newStartVnode = newCh[0];
+
+      var newEndIdx = newCh.length - 1;
       var newEndVnode = newCh[newEndIdx];
+
       var oldKeyToIdx, idxInOld, vnodeToMove, refElm;
 
       // removeOnly is a special flag used only by <transition-group>
@@ -6081,51 +6012,59 @@
       // during leaving transitions
       var canMove = !removeOnly;
 
-      {
-        checkDuplicateKeys(newCh);
-      }
-
       while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
-        if (isUndef(oldStartVnode)) {
+        if (isUndef(oldStartVnode)) { // 如果oldStart被置空了 => 直接跳过
           oldStartVnode = oldCh[++oldStartIdx]; // Vnode has been moved left
-        } else if (isUndef(oldEndVnode)) {
+        } else if (isUndef(oldEndVnode)) {  // 如果oldEnd被置空了 => 直接跳过
           oldEndVnode = oldCh[--oldEndIdx];
-        } else if (sameVnode(oldStartVnode, newStartVnode)) {
+
+        } else if (sameVnode(oldStartVnode, newStartVnode)) {  // oldStart 和 newStart 
           patchVnode(oldStartVnode, newStartVnode, insertedVnodeQueue, newCh, newStartIdx);
           oldStartVnode = oldCh[++oldStartIdx];
           newStartVnode = newCh[++newStartIdx];
-        } else if (sameVnode(oldEndVnode, newEndVnode)) {
+        } else if (sameVnode(oldStartVnode, newEndVnode)) { // oldStart 和 newEnd    / Vnode moved right 
+          patchVnode(oldStartVnode, newEndVnode, insertedVnodeQueue, newCh, newEndIdx);
+          canMove && parentElm.insertBefore(oldStartVnode.elm, oldEndVnode.elm.nextSibling());
+          oldStartVnode = oldCh[++oldStartIdx];
+          newEndVnode = newCh[--newEndIdx];
+
+        } else if (sameVnode(oldEndVnode, newEndVnode)) {  // oldEnd 和 newEnd
           patchVnode(oldEndVnode, newEndVnode, insertedVnodeQueue, newCh, newEndIdx);
           oldEndVnode = oldCh[--oldEndIdx];
           newEndVnode = newCh[--newEndIdx];
-        } else if (sameVnode(oldStartVnode, newEndVnode)) { // Vnode moved right
-          patchVnode(oldStartVnode, newEndVnode, insertedVnodeQueue, newCh, newEndIdx);
-          canMove && nodeOps.insertBefore(parentElm, oldStartVnode.elm, nodeOps.nextSibling(oldEndVnode.elm));
-          oldStartVnode = oldCh[++oldStartIdx];
-          newEndVnode = newCh[--newEndIdx];
         } else if (sameVnode(oldEndVnode, newStartVnode)) { // Vnode moved left
           patchVnode(oldEndVnode, newStartVnode, insertedVnodeQueue, newCh, newStartIdx);
-          canMove && nodeOps.insertBefore(parentElm, oldEndVnode.elm, oldStartVnode.elm);
+          canMove && parentElm.insertBefore(oldEndVnode.elm, oldStartVnode.elm);
           oldEndVnode = oldCh[--oldEndIdx];
           newStartVnode = newCh[++newStartIdx];
+
         } else {
-          if (isUndef(oldKeyToIdx)) { oldKeyToIdx = createKeyToOldIdx(oldCh, oldStartIdx, oldEndIdx); }
+
+          if (isUndef(oldKeyToIdx)) { 
+            oldKeyToIdx = createKeyToOldIdx(oldCh, oldStartIdx, oldEndIdx); 
+          }
+          // 以上的判断都不符合，找到 newStart 在旧子节点中的位置
           idxInOld = isDef(newStartVnode.key)
             ? oldKeyToIdx[newStartVnode.key]
             : findIdxInOld(newStartVnode, oldCh, oldStartIdx, oldEndIdx);
-          if (isUndef(idxInOld)) { // New element
+
+          if (isUndef(idxInOld)) { // New element 
+            // 如果新子节点里有 旧子节点里没有，直接添加到对应index
             createElm(newStartVnode, insertedVnodeQueue, parentElm, oldStartVnode.elm, false, newCh, newStartIdx);
           } else {
             vnodeToMove = oldCh[idxInOld];
+
             if (sameVnode(vnodeToMove, newStartVnode)) {
               patchVnode(vnodeToMove, newStartVnode, insertedVnodeQueue, newCh, newStartIdx);
               oldCh[idxInOld] = undefined;
-              canMove && nodeOps.insertBefore(parentElm, vnodeToMove.elm, oldStartVnode.elm);
+              canMove && parentElm.insertBefore(vnodeToMove.elm, oldStartVnode.elm);
+
             } else {
               // same key but different element. treat as new element
               createElm(newStartVnode, insertedVnodeQueue, parentElm, oldStartVnode.elm, false, newCh, newStartIdx);
             }
           }
+
           newStartVnode = newCh[++newStartIdx];
         }
       }
@@ -6162,6 +6101,16 @@
       }
     }
 
+    /**
+     * patchVnode 做了啥？：
+     * @param {*} oldVnode 
+     * @param {*} vnode 
+     * @param {*} insertedVnodeQueue 
+     * @param {*} ownerArray 
+     * @param {*} index 
+     * @param {*} removeOnly 
+     * @returns 
+     */
     function patchVnode (
       oldVnode,
       vnode,
@@ -6194,6 +6143,7 @@
       // note we only do this if the vnode is cloned -
       // if the new node is not cloned it means the render functions have been
       // reset by the hot-reload-api and we need to do a proper re-render.
+      // 检查是否是静态节点，如果是，退出
       if (isTrue(vnode.isStatic) &&
         isTrue(oldVnode.isStatic) &&
         vnode.key === oldVnode.key &&
@@ -6203,33 +6153,51 @@
         return
       }
 
-      var i;
-      var data = vnode.data;
+      var i; 
+      /**
+       * data 是vdom template上的所有attribute,包括
+       * attrs: {alt: "777"}
+       * key: "D"
+       * staticClass: "test-cls"
+       */
+      var data = vnode.data; 
+
       if (isDef(data) && isDef(i = data.hook) && isDef(i = i.prepatch)) {
         i(oldVnode, vnode);
       }
 
       var oldCh = oldVnode.children;
       var ch = vnode.children;
-      if (isDef(data) && isPatchable(vnode)) {
-        for (i = 0; i < cbs.update.length; ++i) { cbs.update[i](oldVnode, vnode); }
-        if (isDef(i = data.hook) && isDef(i = i.update)) { i(oldVnode, vnode); }
+      if (isDef(data) && isPatchable(vnode)) {  // 何为patchable？有tag标签，也就是元素节点
+        for (i = 0; i < cbs.update.length; ++i) { 
+          cbs.update[i](oldVnode, vnode); 
+        }
+        if (isDef(i = data.hook) && isDef(i = i.update)) { 
+          i(oldVnode, vnode); 
+        }
       }
       if (isUndef(vnode.text)) {
-        if (isDef(oldCh) && isDef(ch)) {
-          if (oldCh !== ch) { updateChildren(elm, oldCh, ch, insertedVnodeQueue, removeOnly); }
-        } else if (isDef(ch)) {
-          {
-            checkDuplicateKeys(ch);
+
+        if (isDef(oldCh) && isDef(ch)) {  // 新节点是元素节点 且 新旧节点都有子节点 => diff 子节点
+          if (oldCh !== ch) { 
+            updateChildren(elm, oldCh, ch, insertedVnodeQueue, removeOnly); 
           }
+
+        } else if (isDef(ch)) {  // 新节点是元素节点 且 新节点有子节点，旧节点没有子节点 => 添加新子节点
           if (isDef(oldVnode.text)) { nodeOps.setTextContent(elm, ''); }
           addVnodes(elm, null, ch, 0, ch.length - 1, insertedVnodeQueue);
-        } else if (isDef(oldCh)) {
+
+        } else if (isDef(oldCh)) {  // 新节点是元素节点 且 旧节点有子节点，新节点没有子节点 => 删除旧子节点
           removeVnodes(oldCh, 0, oldCh.length - 1);
-        } else if (isDef(oldVnode.text)) {
+
+        } else if (isDef(oldVnode.text)) {  // 新节点是元素节点 且 新旧节点都没有子节点（说明新节点是空节点） 且 旧节点是文本节点（说明旧节点有文本） => 新节点置空文本节点
           nodeOps.setTextContent(elm, '');
+
+        } else {
+          // 新节点是元素节点 且 新旧节点都没有子节点（说明新节点是空节点） 且 旧节点不是文本节点（说明旧节点也是空节点） => 啥也不做 
         }
-      } else if (oldVnode.text !== vnode.text) {
+
+      } else if (oldVnode.text !== vnode.text) { // 新节点是文本节点 且 旧节点可能是文本节点 也可能是元素节点，=> 新节点强行 无脑设置为文本节点
         nodeOps.setTextContent(elm, vnode.text);
       }
       if (isDef(data)) {
@@ -6379,31 +6347,15 @@
           // patch existing root node
           patchVnode(oldVnode, vnode, insertedVnodeQueue, null, null, removeOnly);
         } else {
+
           if (isRealElement) {
             // mounting to a real element
             // check if this is server-rendered content and if we can perform
             // a successful hydration.
-            if (oldVnode.nodeType === 1 && oldVnode.hasAttribute(SSR_ATTR)) {
-              oldVnode.removeAttribute(SSR_ATTR);
-              hydrating = true;
-            }
-            if (isTrue(hydrating)) {
-              if (hydrate(oldVnode, vnode, insertedVnodeQueue)) {
-                invokeInsertHook(vnode, insertedVnodeQueue, true);
-                return oldVnode
-              } else {
-                warn(
-                  'The client-side rendered virtual DOM tree is not matching ' +
-                  'server-rendered content. This is likely caused by incorrect ' +
-                  'HTML markup, for example nesting block-level elements inside ' +
-                  '<p>, or missing <tbody>. Bailing hydration and performing ' +
-                  'full client-side render.'
-                );
-              }
-            }
+ 
             // either not server-rendered, or hydration failed.
             // create an empty node and replace it
-            oldVnode = emptyNodeAt(oldVnode);
+            oldVnode = emptyNodeAt(oldVnode); // #app DOM根节点，根据真实dom节点生成虚拟DOM
           }
 
           // replacing existing element
@@ -7496,6 +7448,12 @@
 
   var svgContainer;
 
+  /**
+   * 更新DOM property，比如elm.value，elm.checked，elm.textContent，elm.innerHTML
+   * @param {*} oldVnode 
+   * @param {*} vnode 
+   * @returns 
+   */
   function updateDOMProps (oldVnode, vnode) {
     if (isUndef(oldVnode.data.domProps) && isUndef(vnode.data.domProps)) {
       return
@@ -7521,8 +7479,12 @@
       // as these will throw away existing DOM nodes and cause removal errors
       // on subsequent patches (#3360)
       if (key === 'textContent' || key === 'innerHTML') {
-        if (vnode.children) { vnode.children.length = 0; }
-        if (cur === oldProps[key]) { continue }
+        if (vnode.children) { 
+          vnode.children.length = 0; 
+        }
+        if (cur === oldProps[key]) { 
+          continue 
+        }
         // #6601 work around Chrome version <= 55 bug where single textNode
         // replaced by innerHTML/textContent retains its parentNode property
         if (elm.childNodes.length === 1) {
@@ -8336,6 +8298,7 @@
     }
   } : {};
 
+  // 新节点需要更新的部分
   var platformModules = [
     attrs,
     klass,
@@ -8938,7 +8901,7 @@
   extend(Vue.options.components, platformComponents);
 
   // install platform patch function
-  Vue.prototype.__patch__ = inBrowser ? patch : noop;
+  Vue.prototype.__patch__ = patch;
 
   // public mount method
   Vue.prototype.$mount = function (

@@ -20,51 +20,59 @@
           '<div><button v-on:click="count++">You clicked me {{ count }} times.</button><slot></slot></div>',
       });
       const vm = new Vue({
-        template: `<div>
-            {{testObj}}
-            <!--
-            <Comp><div>666</div></Comp>
-            <div :alt='abc'>3</div>
-            <div>{{abc}}<div>999<div>111</div></div></div>
-            <div>999<div>111</div></div>
-            -->
+        template: `<div>asdf
+          <button-counter/>
           </div>`,
+        // `<div>asdf
+        //   <ul class="ul-cls" @hook:mounted="a">
+        //     <li v-for="item of list" :key="item.s" class="test-cls" alt="777">{{item.s}}</li>  
+        //   </ul>
+        //   </div>`,
         el: "#app",
         data: {
           // abc: 123,
-          obj: { a: 333 },
+          // list:[{s:'A'},{s:'B'},{s:'C'}]
+          list:[{s:'A'},{s:'B'},{s:'C'},{s:'D'},{s:'E'}]
+          // obj: { a: 333 },
         },
-        watch:{
-          'obj.a'(val){
-            debugger
-            console.log('watcher',val)
-          }
-        },
+        // watch:{
+        //   'obj.a'(val){
+        //     debugger
+        //     console.log('watcher',val)
+        //   }
+        // },
         mounted() {
+          // this.list = [{s:'B'},{s:'C'},{s:'E'},{s:'A'}]
+          this.list = [{s:'B'},{s:'E'},{s:'B'},{s:'E'},{s:'D'},{s:'C'}]
           // this.abc = 3;
           // this.abc = 4
           // setTimeout(() => (this.obj = 888), 10000);
           // console.log(this)
-          this.obj.a = 888
+          // this.obj.a = 888
           // this.obj = {c:3}
           // this.a = 66
-
-
+          // this.obj.a = 666
+          // setTimeout(()=>this.obj.a = 222, 5000)
         },
         computed: {
           // testObj() {
-          //   debugger;
-          //   console.log('computed')
-          //   this.a = 34
-          //   return this.a;
+          //   // debugger;
+          //   // console.log('computed')
+          //   // this.a = 34
+          //   return this.obj.a;
           // },
           // testObj2(){
           //   return this.testObj
           // }
         },
-        // components: {
-        //     Comp
-        // },
+        methods:{
+          // a(){
+          //   console.log(333)
+          // }
+        },
+        components: {
+            Comp
+        },
       });
 
 

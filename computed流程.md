@@ -1,3 +1,8 @@
+## computed和watcher区别：
+1. 初始化时，会不会收集依赖
+2. computed有缓存
+3. computed不支持异步
+
 ## computed watcher 监听
 1. 初始化 computed watcher 的时候，不管内部有没有响应式数据，都生成一个computedWatcher，此时不需要取值收集依赖
 2. 执行render函数，遇到 computed 属性，执行我们传的 computed 的 getter,如果第一次取值，
