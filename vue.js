@@ -357,8 +357,6 @@
     }
   }
 
-  var SSR_ATTR = 'data-server-rendered';
-
   var ASSET_TYPES = [
     'component',
     'directive',
@@ -743,6 +741,8 @@
       // subs aren't sorted in scheduler if not running async
       // we need to sort them now to make sure they fire in correct
       // order
+
+      // watcher顺序问题：根据watcher的id严格强调顺序
       subs.sort(function (a, b) { return a.id - b.id; });
     }
     for (var i = 0, l = subs.length; i < l; i++) {
@@ -1580,9 +1580,8 @@
   function resolveAsset (
     options,
     type,
-    id,
-    warnMissing
-  ) {
+    id
+    ) {
     /* istanbul ignore if */
     if (typeof id !== 'string') {
       return
@@ -1596,12 +1595,6 @@
     if (hasOwn(assets, PascalCaseId)) { return assets[PascalCaseId] }
     // fallback to prototype chain
     var res = assets[id] || assets[camelizedId] || assets[PascalCaseId];
-    if (warnMissing && !res) {
-      warn(
-        'Failed to resolve ' + type.slice(0, -1) + ': ' + id,
-        options
-      );
-    }
     return res
   }
 
@@ -2535,6 +2528,8 @@
         (slots.default || (slots.default = [])).push(child);
       }
     }
+
+    // 避免空格和注释被认为是slot
     // ignore slots that contains only whitespace
     for (var name$1 in slots) {
       if (slots[name$1].every(isWhitespace)) {
@@ -2690,20 +2685,14 @@
     if (scopedSlotFn) { // scoped slot
       props = props || {};
       if (bindObject) {
-        if (!isObject(bindObject)) {
-          warn(
-            'slot v-bind without argument expects an Object',
-            this
-          );
-        }
-        props = extend(extend({}, bindObject), props);
+        props = {...bindObject, ...props};
       }
       nodes = scopedSlotFn(props) || fallback;
     } else {
       nodes = this.$slots[name] || fallback;
     }
 
-    var target = props && props.slot;
+    var target = props && props.slot;  // 针对于v-slot
     if (target) {
       return this.$createElement('template', { slot: target }, nodes)
     } else {
@@ -2765,45 +2754,38 @@
     isSync
   ) {
     if (value) {
-      if (!isObject(value)) {
-        warn(
-          'v-bind without argument expects an Object or Array value',
-          this
-        );
-      } else {
-        if (Array.isArray(value)) {
-          value = toObject(value);
-        }
-        var hash;
-        var loop = function ( key ) {
-          if (
-            key === 'class' ||
-            key === 'style' ||
-            isReservedAttribute(key)
-          ) {
-            hash = data;
-          } else {
-            var type = data.attrs && data.attrs.type;
-            hash = asProp || config.mustUseProp(tag, type, key)
-              ? data.domProps || (data.domProps = {})
-              : data.attrs || (data.attrs = {});
-          }
-          var camelizedKey = camelize(key);
-          var hyphenatedKey = hyphenate(key);
-          if (!(camelizedKey in hash) && !(hyphenatedKey in hash)) {
-            hash[key] = value[key];
-
-            if (isSync) {
-              var on = data.on || (data.on = {});
-              on[("update:" + key)] = function ($event) {
-                value[key] = $event;
-              };
-            }
-          }
-        };
-
-        for (var key in value) loop( key );
+      if (Array.isArray(value)) {
+        value = toObject(value);
       }
+      var hash;
+      var loop = function ( key ) {
+        if (
+          key === 'class' ||
+          key === 'style' ||
+          isReservedAttribute(key)
+        ) {
+          hash = data;
+        } else {
+          var type = data.attrs && data.attrs.type;
+          hash = asProp || config.mustUseProp(tag, type, key)
+            ? data.domProps || (data.domProps = {})
+            : data.attrs || (data.attrs = {});
+        }
+        var camelizedKey = camelize(key);
+        var hyphenatedKey = hyphenate(key);
+        if (!(camelizedKey in hash) && !(hyphenatedKey in hash)) {
+          hash[key] = value[key];
+
+          if (isSync) {
+            var on = data.on || (data.on = {});
+            on[("update:" + key)] = function ($event) {
+              value[key] = $event;
+            };
+          }
+        }
+      };
+
+      for (var key in value) loop( key );
     }
     return data
   }
@@ -2903,14 +2885,12 @@
     res = res || { $stable: !hasDynamicKeys };
     for (var i = 0; i < fns.length; i++) {
       var slot = fns[i];
-      if (Array.isArray(slot)) {
-        resolveScopedSlots(slot, res, hasDynamicKeys);
-      } else if (slot) {
+      if (slot) {
         // marker for reverse proxying v-slot without scope on this.$slots
         if (slot.proxy) {
           slot.fn.proxy = true;
         }
-        res[slot.key] = slot.fn;
+        res[slot.key] = slot.fn;  // 把 scopedSlot fn 存入componet 供createComponent使用
       }
     }
     if (contentHashKey) {
@@ -2966,153 +2946,6 @@
     target._p = prependModifier;
   }
 
-  /*  */
-
-  function FunctionalRenderContext (
-    data,
-    props,
-    children,
-    parent,
-    Ctor
-  ) {
-    var this$1 = this;
-
-    var options = Ctor.options;
-    // ensure the createElement function in functional components
-    // gets a unique context - this is necessary for correct named slot check
-    var contextVm;
-    if (hasOwn(parent, '_uid')) {
-      contextVm = Object.create(parent);
-      // $flow-disable-line
-      contextVm._original = parent;
-    } else {
-      // the context vm passed in is a functional context as well.
-      // in this case we want to make sure we are able to get a hold to the
-      // real context instance.
-      contextVm = parent;
-      // $flow-disable-line
-      parent = parent._original;
-    }
-    var isCompiled = isTrue(options._compiled);
-    var needNormalization = !isCompiled;
-
-    this.data = data;
-    this.props = props;
-    this.children = children;
-    this.parent = parent;
-    this.listeners = data.on || emptyObject;
-    this.injections = resolveInject(options.inject, parent);
-    this.slots = function () {
-      if (!this$1.$slots) {
-        normalizeScopedSlots(
-          data.scopedSlots,
-          this$1.$slots = resolveSlots(children, parent)
-        );
-      }
-      return this$1.$slots
-    };
-
-    Object.defineProperty(this, 'scopedSlots', ({
-      enumerable: true,
-      get: function get () {
-        return normalizeScopedSlots(data.scopedSlots, this.slots())
-      }
-    }));
-
-    // support for compiled functional template
-    if (isCompiled) {
-      // exposing $options for renderStatic()
-      this.$options = options;
-      // pre-resolve slots for renderSlot()
-      this.$slots = this.slots();
-      this.$scopedSlots = normalizeScopedSlots(data.scopedSlots, this.$slots);
-    }
-
-    if (options._scopeId) {
-      this._c = function (a, b, c, d) {
-        var vnode = createElement(contextVm, a, b, c, d, needNormalization);
-        if (vnode && !Array.isArray(vnode)) {
-          vnode.fnScopeId = options._scopeId;
-          vnode.fnContext = parent;
-        }
-        return vnode
-      };
-    } else {
-      this._c = function (a, b, c, d) { return createElement(contextVm, a, b, c, d, needNormalization); };
-    }
-  }
-
-  installRenderHelpers(FunctionalRenderContext.prototype);
-
-  function createFunctionalComponent (
-    Ctor,
-    propsData,
-    data,
-    contextVm,
-    children
-  ) {
-    var options = Ctor.options;
-    var props = {};
-    var propOptions = options.props;
-    if (isDef(propOptions)) {
-      for (var key in propOptions) {
-        props[key] = validateProp(key, propOptions, propsData || emptyObject);
-      }
-    } else {
-      if (isDef(data.attrs)) { mergeProps(props, data.attrs); }
-      if (isDef(data.props)) { mergeProps(props, data.props); }
-    }
-
-    var renderContext = new FunctionalRenderContext(
-      data,
-      props,
-      children,
-      contextVm,
-      Ctor
-    );
-
-    var vnode = options.render.call(null, renderContext._c, renderContext);
-    if (vnode instanceof VNode) {
-      return cloneAndMarkFunctionalResult(vnode, data, renderContext.parent, options, renderContext)
-    } else if (Array.isArray(vnode)) {
-      var vnodes = normalizeChildren(vnode) || [];
-      var res = new Array(vnodes.length);
-      for (var i = 0; i < vnodes.length; i++) {
-        res[i] = cloneAndMarkFunctionalResult(vnodes[i], data, renderContext.parent, options, renderContext);
-      }
-      return res
-    }
-  }
-
-  function cloneAndMarkFunctionalResult (vnode, data, contextVm, options, renderContext) {
-    // #7817 clone node before setting fnContext, otherwise if the node is reused
-    // (e.g. it was from a cached normal slot) the fnContext causes named slots
-    // that should not be matched to match.
-    var clone = cloneVNode(vnode);
-    clone.fnContext = contextVm;
-    clone.fnOptions = options;
-    {
-      (clone.devtoolsMeta = clone.devtoolsMeta || {}).renderContext = renderContext;
-    }
-    if (data.slot) {
-      (clone.data || (clone.data = {})).slot = data.slot;
-    }
-    return clone
-  }
-
-  function mergeProps (to, from) {
-    for (var key in from) {
-      to[camelize(key)] = from[key];
-    }
-  }
-
-  /*  */
-
-  /*  */
-
-  /*  */
-
-  /*  */
 
   // inline hooks to be invoked on component VNodes during patch
   var componentVNodeHooks = {
@@ -3127,7 +2960,7 @@
         componentVNodeHooks.prepatch(mountedNode, mountedNode);
       } else {
         var child = vnode.componentInstance = createComponentInstanceForVnode(
-          vnode,
+          vnode,  // 这个就是_parentVnode, 组件占位节点
           activeInstance
         );
         child.$mount(hydrating ? vnode.elm : undefined, hydrating);
@@ -3207,7 +3040,7 @@
     if (isUndef(Ctor.cid)) {
       asyncFactory = Ctor;
       Ctor = resolveAsyncComponent(asyncFactory, baseCtor);
-      if (Ctor === undefined) {
+      if (Ctor === undefined) {  // 如果Ctor是undefined，说明factory.resolved是undefined，代表了异步函数没有执行完毕
         // return a placeholder node for async component, which is rendered
         // as a comment node but preserves all the raw information for the node.
         // the information will be used for async server-rendering and hydration.
@@ -3234,11 +3067,6 @@
 
     // extract props
     var propsData = extractPropsFromVNodeData(data, Ctor, tag);
-
-    // functional component
-    if (isTrue(Ctor.options.functional)) {
-      return createFunctionalComponent(Ctor, propsData, data, context, children)
-    }
 
     // extract listeners, since these needs to be treated as
     // child component listeners instead of DOM listeners
@@ -3267,7 +3095,7 @@
     var vnode = new VNode(
       ("vue-component-" + (Ctor.cid) + (name ? ("-" + name) : '')),
       data, undefined, undefined, undefined, context,
-      { Ctor: Ctor, propsData: propsData, listeners: listeners, tag: tag, children: children },
+      { Ctor: Ctor, propsData: propsData, listeners: listeners, tag: tag, children: children /** 这个children被用为slot */ },
       asyncFactory
     );
 
@@ -3280,15 +3108,9 @@
   ) {
     var options = {
       _isComponent: true,
-      _parentVnode: vnode,
+      _parentVnode: vnode,  // _parentVnode 在这里
       parent: parent
     };
-    // check inline-template render functions
-    var inlineTemplate = vnode.data.inlineTemplate;
-    if (isDef(inlineTemplate)) {
-      options.render = inlineTemplate.render;
-      options.staticRenderFns = inlineTemplate.staticRenderFns;
-    }
     return new vnode.componentOptions.Ctor(options) // 子组件实例化
   }
 
@@ -3454,7 +3276,7 @@
     vm._vnode = null; // the root of the child tree
     vm._staticTrees = null; // v-once cached trees
     var options = vm.$options;
-    var parentVnode = vm.$vnode = options._parentVnode; // the placeholder node in parent tree
+    var parentVnode = vm.$vnode = options._parentVnode; // 是组件的占位节点，也就是组件标签 the placeholder node in parent tree
     var renderContext = parentVnode && parentVnode.context;
     vm.$slots = resolveSlots(options._renderChildren, renderContext);
     vm.$scopedSlots = emptyObject;
@@ -3462,7 +3284,9 @@
     // so that we get proper render context inside it.
     // args order: tag, data, children, normalizationType, alwaysNormalize
     // internal version is used by render functions compiled from templates
-    vm._c = function (a, b, c, d) { return createElement(vm, a, b, c, d, false); };
+    vm._c = function (a, b, c, d) { 
+      return createElement(vm, a, b, c, d, false); 
+    };
     // normalization is always applied for the public version, used in
     // user-written render functions.
     vm.$createElement = function (a, b, c, d) { return createElement(vm, a, b, c, d, true); };
@@ -3535,7 +3359,7 @@
     ) {
       comp = comp.default;
     }
-    return isObject(comp)
+    return isObject(comp) // 如果是对象，说明是组件参数对象，通过extend包裹下返回此异步组件构造函数
       ? base.extend(comp)
       : comp
   }
@@ -3581,7 +3405,9 @@
       var timerLoading = null;
       var timerTimeout = null
 
-      ;(owner).$on('hook:destroyed', function () { return remove(owners, owner); });
+      ;(owner).$on('hook:destroyed', function () { 
+        return remove(owners, owner); 
+      });
 
       var forceRender = function (renderCompleted) {
         for (var i = 0, l = owners.length; i < l; i++) {
@@ -3603,13 +3429,13 @@
 
       var resolve = once(function (res) {
         // cache resolved
-        factory.resolved = ensureCtor(res, baseCtor);
+        factory.resolved = ensureCtor(res, baseCtor);  // 关键，拿到子组件构造函数
         // invoke callbacks only if this is not a synchronous resolve
         // (async resolves are shimmed as synchronous during SSR)
         if (!sync) {
-          forceRender(true);
+          forceRender(true);  // 关键，触发引用组件强制更新
         } else {
-          owners.length = 0;
+          owners.length = 0;  // 如果跟随factory直接执行完毕，说明是同步组件，
         }
       });
 
@@ -3624,7 +3450,7 @@
         }
       });
 
-      var res = factory(resolve, reject);
+      var res = factory(resolve, reject);  // 关键
 
       if (isObject(res)) {
         if (isPromise(res)) {
@@ -3667,11 +3493,11 @@
         }
       }
 
-      sync = false;
+      sync = false;  // 标注上当前宏任务完成，如果再用到这个flag，已经是异步任务了
       // return in case resolved synchronously
       return factory.loading
         ? factory.loadingComp
-        : factory.resolved
+        : factory.resolved  // 如果factory.resolved是undefined 代表异步函数没执行完毕
     }
   }
 
@@ -4794,14 +4620,6 @@
       // a uid
       vm._uid = uid$3++;
 
-      var startTag, endTag;
-      /* istanbul ignore if */
-      if (config.performance && mark) {
-        startTag = "vue-perf-start:" + (vm._uid);
-        endTag = "vue-perf-end:" + (vm._uid);
-        mark(startTag);
-      }
-
       // a flag to avoid this being observed
       vm._isVue = true;
       // merge options
@@ -4817,10 +4635,9 @@
           vm
         );
       }
-      /* istanbul ignore else */
-      {
-        initProxy(vm);
-      }
+      
+      initProxy(vm);
+      
       // expose real self
       vm._self = vm;
       initLifecycle(vm);
@@ -4832,13 +4649,6 @@
       initProvide(vm); // resolve provide after data/props
       callHook(vm, 'created');
 
-      /* istanbul ignore if */
-      if (config.performance && mark) {
-        vm._name = formatComponentName(vm, false);
-        mark(endTag);
-        measure(("vue " + (vm._name) + " init"), startTag, endTag);
-      }
-
       if (vm.$options.el) {
         vm.$mount(vm.$options.el);
       }
@@ -4848,7 +4658,7 @@
   function initInternalComponent (vm, options) {
     var opts = vm.$options = Object.create(vm.constructor.options);
     // doing this because it's faster than dynamic enumeration.
-    var parentVnode = options._parentVnode;
+    var parentVnode = options._parentVnode; // _parentVnode 在这里传递
     opts.parent = options.parent;
     opts._parentVnode = parentVnode;
 
@@ -5146,10 +4956,14 @@
       var this$1 = this;
 
       this.$watch('include', function (val) {
-        pruneCache(this$1, function (name) { return matches(val, name); });
+        pruneCache(this$1, function (name) { 
+          return matches(val, name); 
+        });
       });
       this.$watch('exclude', function (val) {
-        pruneCache(this$1, function (name) { return !matches(val, name); });
+        pruneCache(this$1, function (name) { 
+          return !matches(val, name); 
+        });
       });
     },
 
@@ -5209,14 +5023,7 @@
   function initGlobalAPI (Vue) {
     // config
     var configDef = {};
-    configDef.get = function () { return config; };
-    {
-      configDef.set = function () {
-        warn(
-          'Do not replace the Vue.config object, set individual fields instead.'
-        );
-      };
-    }
+    configDef.get = function () { return config; };    
     Object.defineProperty(Vue, 'config', configDef);
 
     // exposed util methods.
@@ -5257,22 +5064,6 @@
   }
 
   initGlobalAPI(Vue);
-
-  Object.defineProperty(Vue.prototype, '$isServer', {
-    get: isServerRendering
-  });
-
-  Object.defineProperty(Vue.prototype, '$ssrContext', {
-    get: function get () {
-      /* istanbul ignore next */
-      return this.$vnode && this.$vnode.ssrContext
-    }
-  });
-
-  // expose FunctionalRenderContext for ssr runtime helper installation
-  Object.defineProperty(Vue, 'FunctionalRenderContext', {
-    value: FunctionalRenderContext
-  });
 
   Vue.version = '2.6.12';
 
@@ -5648,7 +5439,7 @@
           sameInputType(a, b)
         ) || (
           isTrue(a.isAsyncPlaceholder) &&
-          a.asyncFactory === b.asyncFactory &&
+          a.asyncFactory === b.asyncFactory && 
           isUndef(b.asyncFactory.error)
         )
       )
@@ -5756,37 +5547,24 @@
       var children = vnode.children;
       var tag = vnode.tag;
       if (isDef(tag)) {
-        {
-          if (data && data.pre) {
-            creatingElmInVPre++;
-          }
-          if (isUnknownElement$$1(vnode, creatingElmInVPre)) {
-            warn(
-              'Unknown custom element: <' + tag + '> - did you ' +
-              'register the component correctly? For recursive components, ' +
-              'make sure to provide the "name" option.',
-              vnode.context
-            );
-          }
+        if (data && data.pre) {
+          creatingElmInVPre++;
         }
 
-        vnode.elm = vnode.ns
-          ? nodeOps.createElementNS(vnode.ns, tag)
-          : nodeOps.createElement(tag, vnode);
+        vnode.elm = nodeOps.createElement(tag, vnode);
         setScope(vnode);
 
-        /* istanbul ignore if */
-        {
-          createChildren(vnode, children, insertedVnodeQueue);
-          if (isDef(data)) {
-            invokeCreateHooks(vnode, insertedVnodeQueue);
-          }
-          insert(parentElm, vnode.elm, refElm);
+        createChildren(vnode, children, insertedVnodeQueue);
+        if (isDef(data)) {
+          invokeCreateHooks(vnode, insertedVnodeQueue);
         }
+        insert(parentElm, vnode.elm, refElm);
 
         if (data && data.pre) {
           creatingElmInVPre--;
         }
+
+
       } else if (isTrue(vnode.isComment)) {
         vnode.elm = nodeOps.createComment(vnode.text);
         insert(parentElm, vnode.elm, refElm);
@@ -5898,8 +5676,12 @@
       }
       i = vnode.data.hook; // Reuse variable
       if (isDef(i)) {
-        if (isDef(i.create)) { i.create(emptyNode, vnode); }
-        if (isDef(i.insert)) { insertedVnodeQueue.push(vnode); }
+        if (isDef(i.create)) { 
+          i.create(emptyNode, vnode); 
+        }
+        if (isDef(i.insert)) { 
+          insertedVnodeQueue.push(vnode); 
+        }
       }
     }
 
@@ -5909,12 +5691,12 @@
     function setScope (vnode) {
       var i;
       if (isDef(i = vnode.fnScopeId)) {
-        nodeOps.setStyleScope(vnode.elm, i);
+        vnode.elm.setAttribute(scopeId, i)
       } else {
         var ancestor = vnode;
         while (ancestor) {
           if (isDef(i = ancestor.context) && isDef(i = i.$options._scopeId)) {
-            nodeOps.setStyleScope(vnode.elm, i);
+            vnode.elm.setAttribute(scopeId, i)
           }
           ancestor = ancestor.parent;
         }
@@ -5925,7 +5707,7 @@
         i !== vnode.fnContext &&
         isDef(i = i.$options._scopeId)
       ) {
-        nodeOps.setStyleScope(vnode.elm, i);
+        vnode.elm.setAttribute(scopeId, i)
       }
     }
 
@@ -6130,9 +5912,9 @@
 
       var elm = vnode.elm = oldVnode.elm;
 
-      if (isTrue(oldVnode.isAsyncPlaceholder)) {
-        if (isDef(vnode.asyncFactory.resolved)) {
-          hydrate(oldVnode.elm, vnode, insertedVnodeQueue);
+      if (isTrue(oldVnode.isAsyncPlaceholder)) {  // 如果老节点是异步占位vnode
+        if (isDef(vnode.asyncFactory.resolved)) {  // 并且新节点已经拿到异步子组件构造函数
+          hydrate(oldVnode.elm, vnode, insertedVnodeQueue); // 大概是把之前的老节点丰满下
         } else {
           vnode.isAsyncPlaceholder = true;
         }
@@ -7730,583 +7512,13 @@
   };
 
   /*  */
-
-  var whitespaceRE = /\s+/;
-
-  /**
-   * Add class with compatibility for SVG since classList is not supported on
-   * SVG elements in IE
-   */
-  function addClass (el, cls) {
-    /* istanbul ignore if */
-    if (!cls || !(cls = cls.trim())) {
-      return
-    }
-
-    /* istanbul ignore else */
-    if (el.classList) {
-      if (cls.indexOf(' ') > -1) {
-        cls.split(whitespaceRE).forEach(function (c) { return el.classList.add(c); });
-      } else {
-        el.classList.add(cls);
-      }
-    } else {
-      var cur = " " + (el.getAttribute('class') || '') + " ";
-      if (cur.indexOf(' ' + cls + ' ') < 0) {
-        el.setAttribute('class', (cur + cls).trim());
-      }
-    }
-  }
-
-  /**
-   * Remove class with compatibility for SVG since classList is not supported on
-   * SVG elements in IE
-   */
-  function removeClass (el, cls) {
-    /* istanbul ignore if */
-    if (!cls || !(cls = cls.trim())) {
-      return
-    }
-
-    /* istanbul ignore else */
-    if (el.classList) {
-      if (cls.indexOf(' ') > -1) {
-        cls.split(whitespaceRE).forEach(function (c) { return el.classList.remove(c); });
-      } else {
-        el.classList.remove(cls);
-      }
-      if (!el.classList.length) {
-        el.removeAttribute('class');
-      }
-    } else {
-      var cur = " " + (el.getAttribute('class') || '') + " ";
-      var tar = ' ' + cls + ' ';
-      while (cur.indexOf(tar) >= 0) {
-        cur = cur.replace(tar, ' ');
-      }
-      cur = cur.trim();
-      if (cur) {
-        el.setAttribute('class', cur);
-      } else {
-        el.removeAttribute('class');
-      }
-    }
-  }
-
-  /*  */
-
-  function resolveTransition (def$$1) {
-    if (!def$$1) {
-      return
-    }
-    /* istanbul ignore else */
-    if (typeof def$$1 === 'object') {
-      var res = {};
-      if (def$$1.css !== false) {
-        extend(res, autoCssTransition(def$$1.name || 'v'));
-      }
-      extend(res, def$$1);
-      return res
-    } else if (typeof def$$1 === 'string') {
-      return autoCssTransition(def$$1)
-    }
-  }
-
-  var autoCssTransition = cached(function (name) {
-    return {
-      enterClass: (name + "-enter"),
-      enterToClass: (name + "-enter-to"),
-      enterActiveClass: (name + "-enter-active"),
-      leaveClass: (name + "-leave"),
-      leaveToClass: (name + "-leave-to"),
-      leaveActiveClass: (name + "-leave-active")
-    }
-  });
-
-  var hasTransition = inBrowser && !isIE9;
-  var TRANSITION = 'transition';
-  var ANIMATION = 'animation';
-
-  // Transition property/event sniffing
-  var transitionProp = 'transition';
-  var transitionEndEvent = 'transitionend';
-  var animationProp = 'animation';
-  var animationEndEvent = 'animationend';
-  if (hasTransition) {
-    /* istanbul ignore if */
-    if (window.ontransitionend === undefined &&
-      window.onwebkittransitionend !== undefined
-    ) {
-      transitionProp = 'WebkitTransition';
-      transitionEndEvent = 'webkitTransitionEnd';
-    }
-    if (window.onanimationend === undefined &&
-      window.onwebkitanimationend !== undefined
-    ) {
-      animationProp = 'WebkitAnimation';
-      animationEndEvent = 'webkitAnimationEnd';
-    }
-  }
-
-  // binding to window is necessary to make hot reload work in IE in strict mode
-  var raf = inBrowser
-    ? window.requestAnimationFrame
-      ? window.requestAnimationFrame.bind(window)
-      : setTimeout
-    : /* istanbul ignore next */ function (fn) { return fn(); };
-
-  function nextFrame (fn) {
-    raf(function () {
-      raf(fn);
-    });
-  }
-
-  function addTransitionClass (el, cls) {
-    var transitionClasses = el._transitionClasses || (el._transitionClasses = []);
-    if (transitionClasses.indexOf(cls) < 0) {
-      transitionClasses.push(cls);
-      addClass(el, cls);
-    }
-  }
-
-  function removeTransitionClass (el, cls) {
-    if (el._transitionClasses) {
-      remove(el._transitionClasses, cls);
-    }
-    removeClass(el, cls);
-  }
-
-  function whenTransitionEnds (
-    el,
-    expectedType,
-    cb
-  ) {
-    var ref = getTransitionInfo(el, expectedType);
-    var type = ref.type;
-    var timeout = ref.timeout;
-    var propCount = ref.propCount;
-    if (!type) { return cb() }
-    var event = type === TRANSITION ? transitionEndEvent : animationEndEvent;
-    var ended = 0;
-    var end = function () {
-      el.removeEventListener(event, onEnd);
-      cb();
-    };
-    var onEnd = function (e) {
-      if (e.target === el) {
-        if (++ended >= propCount) {
-          end();
-        }
-      }
-    };
-    setTimeout(function () {
-      if (ended < propCount) {
-        end();
-      }
-    }, timeout + 1);
-    el.addEventListener(event, onEnd);
-  }
-
-  var transformRE = /\b(transform|all)(,|$)/;
-
-  function getTransitionInfo (el, expectedType) {
-    var styles = window.getComputedStyle(el);
-    // JSDOM may return undefined for transition properties
-    var transitionDelays = (styles[transitionProp + 'Delay'] || '').split(', ');
-    var transitionDurations = (styles[transitionProp + 'Duration'] || '').split(', ');
-    var transitionTimeout = getTimeout(transitionDelays, transitionDurations);
-    var animationDelays = (styles[animationProp + 'Delay'] || '').split(', ');
-    var animationDurations = (styles[animationProp + 'Duration'] || '').split(', ');
-    var animationTimeout = getTimeout(animationDelays, animationDurations);
-
-    var type;
-    var timeout = 0;
-    var propCount = 0;
-    /* istanbul ignore if */
-    if (expectedType === TRANSITION) {
-      if (transitionTimeout > 0) {
-        type = TRANSITION;
-        timeout = transitionTimeout;
-        propCount = transitionDurations.length;
-      }
-    } else if (expectedType === ANIMATION) {
-      if (animationTimeout > 0) {
-        type = ANIMATION;
-        timeout = animationTimeout;
-        propCount = animationDurations.length;
-      }
-    } else {
-      timeout = Math.max(transitionTimeout, animationTimeout);
-      type = timeout > 0
-        ? transitionTimeout > animationTimeout
-          ? TRANSITION
-          : ANIMATION
-        : null;
-      propCount = type
-        ? type === TRANSITION
-          ? transitionDurations.length
-          : animationDurations.length
-        : 0;
-    }
-    var hasTransform =
-      type === TRANSITION &&
-      transformRE.test(styles[transitionProp + 'Property']);
-    return {
-      type: type,
-      timeout: timeout,
-      propCount: propCount,
-      hasTransform: hasTransform
-    }
-  }
-
-  function getTimeout (delays, durations) {
-    /* istanbul ignore next */
-    while (delays.length < durations.length) {
-      delays = delays.concat(delays);
-    }
-
-    return Math.max.apply(null, durations.map(function (d, i) {
-      return toMs(d) + toMs(delays[i])
-    }))
-  }
-
-  // Old versions of Chromium (below 61.0.3163.100) formats floating pointer numbers
-  // in a locale-dependent way, using a comma instead of a dot.
-  // If comma is not replaced with a dot, the input will be rounded down (i.e. acting
-  // as a floor function) causing unexpected behaviors
-  function toMs (s) {
-    return Number(s.slice(0, -1).replace(',', '.')) * 1000
-  }
-
-  /*  */
-
-  function enter (vnode, toggleDisplay) {
-    var el = vnode.elm;
-
-    // call leave callback now
-    if (isDef(el._leaveCb)) {
-      el._leaveCb.cancelled = true;
-      el._leaveCb();
-    }
-
-    var data = resolveTransition(vnode.data.transition);
-    if (isUndef(data)) {
-      return
-    }
-
-    /* istanbul ignore if */
-    if (isDef(el._enterCb) || el.nodeType !== 1) {
-      return
-    }
-
-    var css = data.css;
-    var type = data.type;
-    var enterClass = data.enterClass;
-    var enterToClass = data.enterToClass;
-    var enterActiveClass = data.enterActiveClass;
-    var appearClass = data.appearClass;
-    var appearToClass = data.appearToClass;
-    var appearActiveClass = data.appearActiveClass;
-    var beforeEnter = data.beforeEnter;
-    var enter = data.enter;
-    var afterEnter = data.afterEnter;
-    var enterCancelled = data.enterCancelled;
-    var beforeAppear = data.beforeAppear;
-    var appear = data.appear;
-    var afterAppear = data.afterAppear;
-    var appearCancelled = data.appearCancelled;
-    var duration = data.duration;
-
-    // activeInstance will always be the <transition> component managing this
-    // transition. One edge case to check is when the <transition> is placed
-    // as the root node of a child component. In that case we need to check
-    // <transition>'s parent for appear check.
-    var context = activeInstance;
-    var transitionNode = activeInstance.$vnode;
-    while (transitionNode && transitionNode.parent) {
-      context = transitionNode.context;
-      transitionNode = transitionNode.parent;
-    }
-
-    var isAppear = !context._isMounted || !vnode.isRootInsert;
-
-    if (isAppear && !appear && appear !== '') {
-      return
-    }
-
-    var startClass = isAppear && appearClass
-      ? appearClass
-      : enterClass;
-    var activeClass = isAppear && appearActiveClass
-      ? appearActiveClass
-      : enterActiveClass;
-    var toClass = isAppear && appearToClass
-      ? appearToClass
-      : enterToClass;
-
-    var beforeEnterHook = isAppear
-      ? (beforeAppear || beforeEnter)
-      : beforeEnter;
-    var enterHook = isAppear
-      ? (typeof appear === 'function' ? appear : enter)
-      : enter;
-    var afterEnterHook = isAppear
-      ? (afterAppear || afterEnter)
-      : afterEnter;
-    var enterCancelledHook = isAppear
-      ? (appearCancelled || enterCancelled)
-      : enterCancelled;
-
-    var explicitEnterDuration = toNumber(
-      isObject(duration)
-        ? duration.enter
-        : duration
-    );
-
-    if (explicitEnterDuration != null) {
-      checkDuration(explicitEnterDuration, 'enter', vnode);
-    }
-
-    var expectsCSS = css !== false && !isIE9;
-    var userWantsControl = getHookArgumentsLength(enterHook);
-
-    var cb = el._enterCb = once(function () {
-      if (expectsCSS) {
-        removeTransitionClass(el, toClass);
-        removeTransitionClass(el, activeClass);
-      }
-      if (cb.cancelled) {
-        if (expectsCSS) {
-          removeTransitionClass(el, startClass);
-        }
-        enterCancelledHook && enterCancelledHook(el);
-      } else {
-        afterEnterHook && afterEnterHook(el);
-      }
-      el._enterCb = null;
-    });
-
-    if (!vnode.data.show) {
-      // remove pending leave element on enter by injecting an insert hook
-      mergeVNodeHook(vnode, 'insert', function () {
-        var parent = el.parentNode;
-        var pendingNode = parent && parent._pending && parent._pending[vnode.key];
-        if (pendingNode &&
-          pendingNode.tag === vnode.tag &&
-          pendingNode.elm._leaveCb
-        ) {
-          pendingNode.elm._leaveCb();
-        }
-        enterHook && enterHook(el, cb);
-      });
-    }
-
-    // start enter transition
-    beforeEnterHook && beforeEnterHook(el);
-    if (expectsCSS) {
-      addTransitionClass(el, startClass);
-      addTransitionClass(el, activeClass);
-      nextFrame(function () {
-        removeTransitionClass(el, startClass);
-        if (!cb.cancelled) {
-          addTransitionClass(el, toClass);
-          if (!userWantsControl) {
-            if (isValidDuration(explicitEnterDuration)) {
-              setTimeout(cb, explicitEnterDuration);
-            } else {
-              whenTransitionEnds(el, type, cb);
-            }
-          }
-        }
-      });
-    }
-
-    if (vnode.data.show) {
-      toggleDisplay && toggleDisplay();
-      enterHook && enterHook(el, cb);
-    }
-
-    if (!expectsCSS && !userWantsControl) {
-      cb();
-    }
-  }
-
-  function leave (vnode, rm) {
-    var el = vnode.elm;
-
-    // call enter callback now
-    if (isDef(el._enterCb)) {
-      el._enterCb.cancelled = true;
-      el._enterCb();
-    }
-
-    var data = resolveTransition(vnode.data.transition);
-    if (isUndef(data) || el.nodeType !== 1) {
-      return rm()
-    }
-
-    /* istanbul ignore if */
-    if (isDef(el._leaveCb)) {
-      return
-    }
-
-    var css = data.css;
-    var type = data.type;
-    var leaveClass = data.leaveClass;
-    var leaveToClass = data.leaveToClass;
-    var leaveActiveClass = data.leaveActiveClass;
-    var beforeLeave = data.beforeLeave;
-    var leave = data.leave;
-    var afterLeave = data.afterLeave;
-    var leaveCancelled = data.leaveCancelled;
-    var delayLeave = data.delayLeave;
-    var duration = data.duration;
-
-    var expectsCSS = css !== false && !isIE9;
-    var userWantsControl = getHookArgumentsLength(leave);
-
-    var explicitLeaveDuration = toNumber(
-      isObject(duration)
-        ? duration.leave
-        : duration
-    );
-
-    if (isDef(explicitLeaveDuration)) {
-      checkDuration(explicitLeaveDuration, 'leave', vnode);
-    }
-
-    var cb = el._leaveCb = once(function () {
-      if (el.parentNode && el.parentNode._pending) {
-        el.parentNode._pending[vnode.key] = null;
-      }
-      if (expectsCSS) {
-        removeTransitionClass(el, leaveToClass);
-        removeTransitionClass(el, leaveActiveClass);
-      }
-      if (cb.cancelled) {
-        if (expectsCSS) {
-          removeTransitionClass(el, leaveClass);
-        }
-        leaveCancelled && leaveCancelled(el);
-      } else {
-        rm();
-        afterLeave && afterLeave(el);
-      }
-      el._leaveCb = null;
-    });
-
-    if (delayLeave) {
-      delayLeave(performLeave);
-    } else {
-      performLeave();
-    }
-
-    function performLeave () {
-      // the delayed leave may have already been cancelled
-      if (cb.cancelled) {
-        return
-      }
-      // record leaving element
-      if (!vnode.data.show && el.parentNode) {
-        (el.parentNode._pending || (el.parentNode._pending = {}))[(vnode.key)] = vnode;
-      }
-      beforeLeave && beforeLeave(el);
-      if (expectsCSS) {
-        addTransitionClass(el, leaveClass);
-        addTransitionClass(el, leaveActiveClass);
-        nextFrame(function () {
-          removeTransitionClass(el, leaveClass);
-          if (!cb.cancelled) {
-            addTransitionClass(el, leaveToClass);
-            if (!userWantsControl) {
-              if (isValidDuration(explicitLeaveDuration)) {
-                setTimeout(cb, explicitLeaveDuration);
-              } else {
-                whenTransitionEnds(el, type, cb);
-              }
-            }
-          }
-        });
-      }
-      leave && leave(el, cb);
-      if (!expectsCSS && !userWantsControl) {
-        cb();
-      }
-    }
-  }
-
-  // only used in dev mode
-  function checkDuration (val, name, vnode) {
-    if (typeof val !== 'number') {
-      warn(
-        "<transition> explicit " + name + " duration is not a valid number - " +
-        "got " + (JSON.stringify(val)) + ".",
-        vnode.context
-      );
-    } else if (isNaN(val)) {
-      warn(
-        "<transition> explicit " + name + " duration is NaN - " +
-        'the duration expression might be incorrect.',
-        vnode.context
-      );
-    }
-  }
-
-  function isValidDuration (val) {
-    return typeof val === 'number' && !isNaN(val)
-  }
-
-  /**
-   * Normalize a transition hook's argument length. The hook may be:
-   * - a merged hook (invoker) with the original in .fns
-   * - a wrapped component method (check ._length)
-   * - a plain function (.length)
-   */
-  function getHookArgumentsLength (fn) {
-    if (isUndef(fn)) {
-      return false
-    }
-    var invokerFns = fn.fns;
-    if (isDef(invokerFns)) {
-      // invoker
-      return getHookArgumentsLength(
-        Array.isArray(invokerFns)
-          ? invokerFns[0]
-          : invokerFns
-      )
-    } else {
-      return (fn._length || fn.length) > 1
-    }
-  }
-
-  function _enter (_, vnode) {
-    if (vnode.data.show !== true) {
-      enter(vnode);
-    }
-  }
-
-  var transition = inBrowser ? {
-    create: _enter,
-    activate: _enter,
-    remove: function remove$$1 (vnode, rm) {
-      /* istanbul ignore else */
-      if (vnode.data.show !== true) {
-        leave(vnode, rm);
-      } else {
-        rm();
-      }
-    }
-  } : {};
-
   // 新节点需要更新的部分
   var platformModules = [
     attrs,
     klass,
     events,
     domProps,
-    style,
-    transition
-  ];
+    style  ];
 
   /*  */
 
@@ -8320,17 +7532,6 @@
    * Not type checking this file because flow doesn't like attaching
    * properties to Elements.
    */
-
-  /* istanbul ignore if */
-  if (isIE9) {
-    // http://www.matts411.com/post/internet-explorer-9-oninput/
-    document.addEventListener('selectionchange', function () {
-      var el = document.activeElement;
-      if (el && el.vmodel) {
-        trigger(el, 'input');
-      }
-    });
-  }
 
   var directive = {
     inserted: function inserted (el, binding, vnode, oldVnode) {
@@ -8526,369 +7727,6 @@
 
   /*  */
 
-  var transitionProps = {
-    name: String,
-    appear: Boolean,
-    css: Boolean,
-    mode: String,
-    type: String,
-    enterClass: String,
-    leaveClass: String,
-    enterToClass: String,
-    leaveToClass: String,
-    enterActiveClass: String,
-    leaveActiveClass: String,
-    appearClass: String,
-    appearActiveClass: String,
-    appearToClass: String,
-    duration: [Number, String, Object]
-  };
-
-  // in case the child is also an abstract component, e.g. <keep-alive>
-  // we want to recursively retrieve the real component to be rendered
-  function getRealChild (vnode) {
-    var compOptions = vnode && vnode.componentOptions;
-    if (compOptions && compOptions.Ctor.options.abstract) {
-      return getRealChild(getFirstComponentChild(compOptions.children))
-    } else {
-      return vnode
-    }
-  }
-
-  function extractTransitionData (comp) {
-    var data = {};
-    var options = comp.$options;
-    // props
-    for (var key in options.propsData) {
-      data[key] = comp[key];
-    }
-    // events.
-    // extract listeners and pass them directly to the transition methods
-    var listeners = options._parentListeners;
-    for (var key$1 in listeners) {
-      data[camelize(key$1)] = listeners[key$1];
-    }
-    return data
-  }
-
-  function placeholder (h, rawChild) {
-    if (/\d-keep-alive$/.test(rawChild.tag)) {
-      return h('keep-alive', {
-        props: rawChild.componentOptions.propsData
-      })
-    }
-  }
-
-  function hasParentTransition (vnode) {
-    while ((vnode = vnode.parent)) {
-      if (vnode.data.transition) {
-        return true
-      }
-    }
-  }
-
-  function isSameChild (child, oldChild) {
-    return oldChild.key === child.key && oldChild.tag === child.tag
-  }
-
-  var isNotTextNode = function (c) { return c.tag || isAsyncPlaceholder(c); };
-
-  var isVShowDirective = function (d) { return d.name === 'show'; };
-
-  var Transition = {
-    name: 'transition',
-    props: transitionProps,
-    abstract: true,
-
-    render: function render (h) {
-      var this$1 = this;
-
-      var children = this.$slots.default;
-      if (!children) {
-        return
-      }
-
-      // filter out text nodes (possible whitespaces)
-      children = children.filter(isNotTextNode);
-      /* istanbul ignore if */
-      if (!children.length) {
-        return
-      }
-
-      // warn multiple elements
-      if (children.length > 1) {
-        warn(
-          '<transition> can only be used on a single element. Use ' +
-          '<transition-group> for lists.',
-          this.$parent
-        );
-      }
-
-      var mode = this.mode;
-
-      // warn invalid mode
-      if (mode && mode !== 'in-out' && mode !== 'out-in'
-      ) {
-        warn(
-          'invalid <transition> mode: ' + mode,
-          this.$parent
-        );
-      }
-
-      var rawChild = children[0];
-
-      // if this is a component root node and the component's
-      // parent container node also has transition, skip.
-      if (hasParentTransition(this.$vnode)) {
-        return rawChild
-      }
-
-      // apply transition data to child
-      // use getRealChild() to ignore abstract components e.g. keep-alive
-      var child = getRealChild(rawChild);
-      /* istanbul ignore if */
-      if (!child) {
-        return rawChild
-      }
-
-      if (this._leaving) {
-        return placeholder(h, rawChild)
-      }
-
-      // ensure a key that is unique to the vnode type and to this transition
-      // component instance. This key will be used to remove pending leaving nodes
-      // during entering.
-      var id = "__transition-" + (this._uid) + "-";
-      child.key = child.key == null
-        ? child.isComment
-          ? id + 'comment'
-          : id + child.tag
-        : isPrimitive(child.key)
-          ? (String(child.key).indexOf(id) === 0 ? child.key : id + child.key)
-          : child.key;
-
-      var data = (child.data || (child.data = {})).transition = extractTransitionData(this);
-      var oldRawChild = this._vnode;
-      var oldChild = getRealChild(oldRawChild);
-
-      // mark v-show
-      // so that the transition module can hand over the control to the directive
-      if (child.data.directives && child.data.directives.some(isVShowDirective)) {
-        child.data.show = true;
-      }
-
-      if (
-        oldChild &&
-        oldChild.data &&
-        !isSameChild(child, oldChild) &&
-        !isAsyncPlaceholder(oldChild) &&
-        // #6687 component root is a comment node
-        !(oldChild.componentInstance && oldChild.componentInstance._vnode.isComment)
-      ) {
-        // replace old child transition data with fresh one
-        // important for dynamic transitions!
-        var oldData = oldChild.data.transition = extend({}, data);
-        // handle transition mode
-        if (mode === 'out-in') {
-          // return placeholder node and queue update when leave finishes
-          this._leaving = true;
-          mergeVNodeHook(oldData, 'afterLeave', function () {
-            this$1._leaving = false;
-            this$1.$forceUpdate();
-          });
-          return placeholder(h, rawChild)
-        } else if (mode === 'in-out') {
-          if (isAsyncPlaceholder(child)) {
-            return oldRawChild
-          }
-          var delayedLeave;
-          var performLeave = function () { delayedLeave(); };
-          mergeVNodeHook(data, 'afterEnter', performLeave);
-          mergeVNodeHook(data, 'enterCancelled', performLeave);
-          mergeVNodeHook(oldData, 'delayLeave', function (leave) { delayedLeave = leave; });
-        }
-      }
-
-      return rawChild
-    }
-  };
-
-  /*  */
-
-  var props = extend({
-    tag: String,
-    moveClass: String
-  }, transitionProps);
-
-  delete props.mode;
-
-  var TransitionGroup = {
-    props: props,
-
-    beforeMount: function beforeMount () {
-      var this$1 = this;
-
-      var update = this._update;
-      this._update = function (vnode, hydrating) {
-        var restoreActiveInstance = setActiveInstance(this$1);
-        // force removing pass
-        this$1.__patch__(
-          this$1._vnode,
-          this$1.kept,
-          false, // hydrating
-          true // removeOnly (!important, avoids unnecessary moves)
-        );
-        this$1._vnode = this$1.kept;
-        restoreActiveInstance();
-        update.call(this$1, vnode, hydrating);
-      };
-    },
-
-    render: function render (h) {
-      var tag = this.tag || this.$vnode.data.tag || 'span';
-      var map = Object.create(null);
-      var prevChildren = this.prevChildren = this.children;
-      var rawChildren = this.$slots.default || [];
-      var children = this.children = [];
-      var transitionData = extractTransitionData(this);
-
-      for (var i = 0; i < rawChildren.length; i++) {
-        var c = rawChildren[i];
-        if (c.tag) {
-          if (c.key != null && String(c.key).indexOf('__vlist') !== 0) {
-            children.push(c);
-            map[c.key] = c
-            ;(c.data || (c.data = {})).transition = transitionData;
-          } else {
-            var opts = c.componentOptions;
-            var name = opts ? (opts.Ctor.options.name || opts.tag || '') : c.tag;
-            warn(("<transition-group> children must be keyed: <" + name + ">"));
-          }
-        }
-      }
-
-      if (prevChildren) {
-        var kept = [];
-        var removed = [];
-        for (var i$1 = 0; i$1 < prevChildren.length; i$1++) {
-          var c$1 = prevChildren[i$1];
-          c$1.data.transition = transitionData;
-          c$1.data.pos = c$1.elm.getBoundingClientRect();
-          if (map[c$1.key]) {
-            kept.push(c$1);
-          } else {
-            removed.push(c$1);
-          }
-        }
-        this.kept = h(tag, null, kept);
-        this.removed = removed;
-      }
-
-      return h(tag, null, children)
-    },
-
-    updated: function updated () {
-      var children = this.prevChildren;
-      var moveClass = this.moveClass || ((this.name || 'v') + '-move');
-      if (!children.length || !this.hasMove(children[0].elm, moveClass)) {
-        return
-      }
-
-      // we divide the work into three loops to avoid mixing DOM reads and writes
-      // in each iteration - which helps prevent layout thrashing.
-      children.forEach(callPendingCbs);
-      children.forEach(recordPosition);
-      children.forEach(applyTranslation);
-
-      // force reflow to put everything in position
-      // assign to this to avoid being removed in tree-shaking
-      // $flow-disable-line
-      this._reflow = document.body.offsetHeight;
-
-      children.forEach(function (c) {
-        if (c.data.moved) {
-          var el = c.elm;
-          var s = el.style;
-          addTransitionClass(el, moveClass);
-          s.transform = s.WebkitTransform = s.transitionDuration = '';
-          el.addEventListener(transitionEndEvent, el._moveCb = function cb (e) {
-            if (e && e.target !== el) {
-              return
-            }
-            if (!e || /transform$/.test(e.propertyName)) {
-              el.removeEventListener(transitionEndEvent, cb);
-              el._moveCb = null;
-              removeTransitionClass(el, moveClass);
-            }
-          });
-        }
-      });
-    },
-
-    methods: {
-      hasMove: function hasMove (el, moveClass) {
-        /* istanbul ignore if */
-        if (!hasTransition) {
-          return false
-        }
-        /* istanbul ignore if */
-        if (this._hasMove) {
-          return this._hasMove
-        }
-        // Detect whether an element with the move class applied has
-        // CSS transitions. Since the element may be inside an entering
-        // transition at this very moment, we make a clone of it and remove
-        // all other transition classes applied to ensure only the move class
-        // is applied.
-        var clone = el.cloneNode();
-        if (el._transitionClasses) {
-          el._transitionClasses.forEach(function (cls) { removeClass(clone, cls); });
-        }
-        addClass(clone, moveClass);
-        clone.style.display = 'none';
-        this.$el.appendChild(clone);
-        var info = getTransitionInfo(clone);
-        this.$el.removeChild(clone);
-        return (this._hasMove = info.hasTransform)
-      }
-    }
-  };
-
-  function callPendingCbs (c) {
-    /* istanbul ignore if */
-    if (c.elm._moveCb) {
-      c.elm._moveCb();
-    }
-    /* istanbul ignore if */
-    if (c.elm._enterCb) {
-      c.elm._enterCb();
-    }
-  }
-
-  function recordPosition (c) {
-    c.data.newPos = c.elm.getBoundingClientRect();
-  }
-
-  function applyTranslation (c) {
-    var oldPos = c.data.pos;
-    var newPos = c.data.newPos;
-    var dx = oldPos.left - newPos.left;
-    var dy = oldPos.top - newPos.top;
-    if (dx || dy) {
-      c.data.moved = true;
-      var s = c.elm.style;
-      s.transform = s.WebkitTransform = "translate(" + dx + "px," + dy + "px)";
-      s.transitionDuration = '0s';
-    }
-  }
-
-  var platformComponents = {
-    Transition: Transition,
-    TransitionGroup: TransitionGroup
-  };
-
-  /*  */
-
   // install platform specific utils
   Vue.config.mustUseProp = mustUseProp;
   Vue.config.isReservedTag = isReservedTag;
@@ -8898,7 +7736,6 @@
 
   // install platform runtime directives & components
   extend(Vue.options.directives, platformDirectives);
-  extend(Vue.options.components, platformComponents);
 
   // install platform patch function
   Vue.prototype.__patch__ = patch;
@@ -8910,6 +7747,41 @@
   ) {
     return mountComponent(this, query(el), hydrating)
   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   /*  */
 
@@ -9498,9 +8370,11 @@
             // scoped slot
             // keep it in the children list so that v-else(-if) conditions can
             // find it as the prev node.
-            var name = element.slotTarget || '"default"'
-            ;(currentParent.scopedSlots || (currentParent.scopedSlots = {}))[name] = element;
+            var name = element.slotTarget || '"default"';
+            // 把插槽的ast传给组件标签的ast
+            (currentParent.scopedSlots || (currentParent.scopedSlots = {}))[name] = element;
           }
+          // 再把插槽实际内容设置成组件标签的children
           currentParent.children.push(element);
           element.parent = currentParent;
         }
@@ -9946,121 +8820,56 @@
 
   // handle content being passed to a component as slot,
   // e.g. <template slot="xxx">, <div slot-scope="xxx">
+  // ast to vnode
   function processSlotContent (el) {
-    var slotScope;
-    if (el.tag === 'template') {
-      slotScope = getAndRemoveAttr(el, 'scope');
-      /* istanbul ignore if */
-      if (slotScope) {
-        warn$2(
-          "the \"scope\" attribute for scoped slots have been deprecated and " +
-          "replaced by \"slot-scope\" since 2.5. The new \"slot-scope\" attribute " +
-          "can also be used on plain elements in addition to <template> to " +
-          "denote scoped slots.",
-          el.rawAttrsMap['scope'],
-          true
-        );
-      }
-      el.slotScope = slotScope || getAndRemoveAttr(el, 'slot-scope');
-    } else if ((slotScope = getAndRemoveAttr(el, 'slot-scope'))) {
-      /* istanbul ignore if */
-      if (el.attrsMap['v-for']) {
-        warn$2(
-          "Ambiguous combined usage of slot-scope and v-for on <" + (el.tag) + "> " +
-          "(v-for takes higher priority). Use a wrapper <template> for the " +
-          "scoped slot to make it clearer.",
-          el.rawAttrsMap['slot-scope'],
-          true
-        );
-      }
-      el.slotScope = slotScope;
-    }
-
-    // slot="xxx"
-    var slotTarget = getBindingAttr(el, 'slot');
-    if (slotTarget) {
-      el.slotTarget = slotTarget === '""' ? '"default"' : slotTarget;
-      el.slotTargetDynamic = !!(el.attrsMap[':slot'] || el.attrsMap['v-bind:slot']);
-      // preserve slot as an attribute for native shadow DOM compat
-      // only for non-scoped slots.
-      if (el.tag !== 'template' && !el.slotScope) {
-        addAttr(el, 'slot', slotTarget, getRawBindingAttr(el, 'slot'));
-      }
-    }
 
     // 2.6 v-slot syntax
-    {
-      if (el.tag === 'template') {
-        // v-slot on <template>
-        var slotBinding = getAndRemoveAttrByRegex(el, slotRE);
-        if (slotBinding) {
+    if (el.tag === 'template') {
+      // v-slot on <template>
+      var slotBinding = getAndRemoveAttrByRegex(el, slotRE);
+      if (slotBinding) {
+
+        // slot必须在template上提示
+        
+        var ref = getSlotName(slotBinding);
+        var name = ref.name; // slot name, 从插头 v-slot:slotName 中读到
+        var dynamic = ref.dynamic;
+        el.slotTarget = name;
+        el.slotTargetDynamic = dynamic;
+        el.slotScope = slotBinding.value || emptySlotScopeToken; // 自定义的scope的namespace, 从插头中获取 v-slot:slotName="scopeNamespace" 
+        // * 普通 slot 也走这里 force it into a scoped slot for perf
+      }
+    } else {
+      // v-slot on component, denotes default slot
+      var slotBinding$1 = getAndRemoveAttrByRegex(el, slotRE);
+      if (slotBinding$1) {
           {
-            if (el.slotTarget || el.slotScope) {
-              warn$2(
-                "Unexpected mixed usage of different slot syntaxes.",
-                el
-              );
-            }
-            if (el.parent && !maybeComponent(el.parent)) {
-              warn$2(
-                "<template v-slot> can only appear at the root level inside " +
-                "the receiving component",
-                el
-              );
-            }
+              // "v-slot can only be used on components or <template>.",
+ 
+              // "Unexpected mixed usage of different slot syntaxes.",
+     
+              // "To avoid scope ambiguity, the default slot should also use " +
+              // "<template> syntax when there are other named slots.",
           }
-          var ref = getSlotName(slotBinding);
-          var name = ref.name;
-          var dynamic = ref.dynamic;
-          el.slotTarget = name;
-          el.slotTargetDynamic = dynamic;
-          el.slotScope = slotBinding.value || emptySlotScopeToken; // force it into a scoped slot for perf
-        }
-      } else {
-        // v-slot on component, denotes default slot
-        var slotBinding$1 = getAndRemoveAttrByRegex(el, slotRE);
-        if (slotBinding$1) {
-          {
-            if (!maybeComponent(el)) {
-              warn$2(
-                "v-slot can only be used on components or <template>.",
-                slotBinding$1
-              );
-            }
-            if (el.slotScope || el.slotTarget) {
-              warn$2(
-                "Unexpected mixed usage of different slot syntaxes.",
-                el
-              );
-            }
-            if (el.scopedSlots) {
-              warn$2(
-                "To avoid scope ambiguity, the default slot should also use " +
-                "<template> syntax when there are other named slots.",
-                slotBinding$1
-              );
-            }
+        // add the component's children to its default slot
+        var slots = el.scopedSlots || (el.scopedSlots = {});
+        var ref$1 = getSlotName(slotBinding$1);
+        var name$1 = ref$1.name;
+        var dynamic$1 = ref$1.dynamic;
+        var slotContainer = slots[name$1] = createASTElement('template', [], el);
+        slotContainer.slotTarget = name$1;
+        slotContainer.slotTargetDynamic = dynamic$1;
+        slotContainer.children = el.children.filter(function (c) {
+          if (!c.slotScope) {
+            c.parent = slotContainer;
+            return true
           }
-          // add the component's children to its default slot
-          var slots = el.scopedSlots || (el.scopedSlots = {});
-          var ref$1 = getSlotName(slotBinding$1);
-          var name$1 = ref$1.name;
-          var dynamic$1 = ref$1.dynamic;
-          var slotContainer = slots[name$1] = createASTElement('template', [], el);
-          slotContainer.slotTarget = name$1;
-          slotContainer.slotTargetDynamic = dynamic$1;
-          slotContainer.children = el.children.filter(function (c) {
-            if (!c.slotScope) {
-              c.parent = slotContainer;
-              return true
-            }
-          });
-          slotContainer.slotScope = slotBinding$1.value || emptySlotScopeToken;
-          // remove children as they are returned from scopedSlots now
-          el.children = [];
-          // mark el non-plain so data gets generated
-          el.plain = false;
-        }
+        });
+        slotContainer.slotScope = slotBinding$1.value || emptySlotScopeToken;
+        // remove children as they are returned from scopedSlots now
+        el.children = [];
+        // mark el non-plain so data gets generated
+        el.plain = false;
       }
     }
   }
@@ -10088,14 +8897,6 @@
   function processSlotOutlet (el) {
     if (el.tag === 'slot') {
       el.slotName = getBindingAttr(el, 'name');
-      if (el.key) {
-        warn$2(
-          "`key` does not work on <slot> because slots are abstract outlets " +
-          "and can possibly expand into multiple elements. " +
-          "Use the key on a wrapping element instead.",
-          getRawBindingAttr(el, 'key')
-        );
-      }
     }
   }
 
@@ -11680,11 +10481,6 @@
         options.render = render;
         options.staticRenderFns = staticRenderFns;
 
-        /* istanbul ignore if */
-        if (config.performance && mark) {
-          mark('compile end');
-          measure(("vue " + (this._name) + " compile"), 'compile', 'compile end');
-        }
       }
     }
     return mount.call(this, el, hydrating)

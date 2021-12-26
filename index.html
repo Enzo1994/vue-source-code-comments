@@ -11,48 +11,44 @@
     <script src="./vue.js"></script>
     <script>
       var Comp = Vue.component("button-counter", {
-        data: function () {
-          return {
-            count: 0,
-          };
-        },
-        template:
-          '<div><button v-on:click="count++">You clicked me {{ count }} times.</button><slot></slot></div>',
-      });
+            data: function () {
+              return {
+                count: 0,
+              };
+            },
+            template:
+              '<div><slot name="testSlot" :count="count"/><button v-on:click="count++">You clicked me {{ count }} times.</button></div>',
+          });
+      // var Comp = Vue.component("button-counter", function (resolve, reject) {
+      //   setTimeout(function () {
+      //     // 向 `resolve` 回调传递组件定义
+      //     resolve({
+      //       data: function () {
+      //         return {
+      //           count: 0,
+      //         };
+      //       },
+      //       template:
+      //         '<div><slot name="testSlot" :count="count"/><button v-on:click="count++">You clicked me {{ count }} times.</button></div>',
+      //     });
+      //   }, 1000);
+      // });
+
       const vm = new Vue({
-        template: `<div>asdf
-          <button-counter/>
+        template: `<div><Comp><template v-slot:testSlot="slotProps"><div>{{slotProps.count}}</div></template></Comp>
           </div>`,
         // `<div>asdf
         //   <ul class="ul-cls" @hook:mounted="a">
-        //     <li v-for="item of list" :key="item.s" class="test-cls" alt="777">{{item.s}}</li>  
+        //     <li v-for="item of list" :key="item.s" class="test-cls" alt="777">{{item.s}}</li>
         //   </ul>
         //   </div>`,
         el: "#app",
         data: {
-          // abc: 123,
+          abc: 123,
+          bcd: 123,
           // list:[{s:'A'},{s:'B'},{s:'C'}]
-          list:[{s:'A'},{s:'B'},{s:'C'},{s:'D'},{s:'E'}]
+          // list: [{ s: "A" }, { s: "B" }, { s: "C" }, { s: "D" }, { s: "E" }],
           // obj: { a: 333 },
-        },
-        // watch:{
-        //   'obj.a'(val){
-        //     debugger
-        //     console.log('watcher',val)
-        //   }
-        // },
-        mounted() {
-          // this.list = [{s:'B'},{s:'C'},{s:'E'},{s:'A'}]
-          this.list = [{s:'B'},{s:'E'},{s:'B'},{s:'E'},{s:'D'},{s:'C'}]
-          // this.abc = 3;
-          // this.abc = 4
-          // setTimeout(() => (this.obj = 888), 10000);
-          // console.log(this)
-          // this.obj.a = 888
-          // this.obj = {c:3}
-          // this.a = 66
-          // this.obj.a = 666
-          // setTimeout(()=>this.obj.a = 222, 5000)
         },
         computed: {
           // testObj() {
@@ -64,18 +60,59 @@
           // testObj2(){
           //   return this.testObj
           // }
+          // cbd(){
+          //   console.log('abccomputed变了')
+          //   return this.abc
+          // },
         },
-        methods:{
+        watch:{
+        //   'obj.a'(val){
+        //     debugger
+        //     console.log('watcher',val)
+        //   }
+        // bcd(){
+        //     console.log('bcd变了')
+        //   },
+        //   abc(){
+        //     console.log('abc变了')
+        //   },
+     
+        },
+        mounted() {
+          // this.list = [{s:'B'},{s:'C'},{s:'E'},{s:'A'}]
+          // this.list = [
+          //   { s: "B" },
+          //   { s: "E" },
+          //   { s: "B" },
+          //   { s: "E" },
+          //   { s: "D" },
+          //   { s: "C" },
+          // ];
+          
+
+          this.abc = 3;
+          
+          // this.bcd = 4
+
+          // this.abc = 4
+          // setTimeout(() => (this.obj = 888), 10000);
+          console.log(this)
+          // this.obj.a = 888
+          // this.obj = {c:3}
+          // this.a = 66
+          // this.obj.a = 666
+          // setTimeout(()=>this.obj.a = 222, 5000)
+        },
+        
+        methods: {
           // a(){
           //   console.log(333)
           // }
         },
         components: {
-            Comp
+          Comp
         },
       });
-
-
     </script>
   </body>
 </html>

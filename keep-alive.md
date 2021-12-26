@@ -15,6 +15,6 @@
         componentVNodeHooks.prepatch(mountedNode, mountedNode);
       } 
     },
-        // ...
+      // ...
     }
 ```

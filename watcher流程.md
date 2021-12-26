@@ -74,6 +74,8 @@ watcher同步更新会导致什么问题？每一次数据变化都会触发页�
 流程：
 1. 数据变化 => update => queueWatcher => nextTick(flushSchedulerQueue) => update结束
 
+**数据变化=> 触发notify => watcher推入队列 => 排序执行cb**
+
 
 nextTick维护一个callbacks 列表
 每次调用nextTick，就把callback存入 callbacks
@@ -93,7 +95,8 @@ pending意义是如果队列上次flush刷新已经结束，也就是上次异�
 
 ![flush流程](/images/nextTick.jpg)
 
-流程
+## 流程：
+
 ```js
 var callbacks = [] // nextTick callbacks
 var pending = false // 异步任务的回调是否执行完成
@@ -123,7 +126,13 @@ function queueWatcher (watcher) {
 }
 
 function nextTick(cb){
-  callbacks.push(cb)
+  callbacks.push(function(){
+    if (cb) {
+      cb.call(ctx);
+    } else if (_resolve) {
+      _resolve(ctx);
+    }
+  })
   if(!pending) {
     pending = true // 只在上次微任务完成后添加一次
     timeFunc()
