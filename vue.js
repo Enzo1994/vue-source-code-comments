@@ -2968,6 +2968,7 @@
     },
 
     prepatch: function prepatch (oldVnode, vnode) {
+      // 如果组件内有内容，也就是slot插头，需要更新下
       var options = vnode.componentOptions;
       var child = vnode.componentInstance = oldVnode.componentInstance;
       updateChildComponent(
@@ -3845,6 +3846,8 @@
     // Any static slot children from the parent may have changed during parent's
     // update. Dynamic scoped slots may also have changed. In such cases, a forced
     // update is necessary to ensure correctness.
+
+    // 如果有slot，则强制更新
     var needsForceUpdate = !!(
       renderChildren ||               // has new static slots
       vm.$options._renderChildren ||  // has old static slots
@@ -3892,9 +3895,7 @@
       vm.$forceUpdate();
     }
 
-    {
-      isUpdatingChildComponent = false;
-    }
+    isUpdatingChildComponent = false;
   }
 
   function isInInactiveTree (vm) {
@@ -5945,7 +5946,7 @@
       var data = vnode.data; 
 
       if (isDef(data) && isDef(i = data.hook) && isDef(i = i.prepatch)) {
-        i(oldVnode, vnode);
+        i(oldVnode, vnode);  // 这里执行prepatch
       }
 
       var oldCh = oldVnode.children;

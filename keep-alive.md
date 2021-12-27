@@ -1,5 +1,9 @@
 ##
 
+## 二次渲染流程 
+keep-alive => patchVnode => prepatch => $forceUpdate => keepAliveRender => 检查缓存使用
+
+
 组件初始化的时候，有个prepatch
 ```js
   // inline hooks to be invoked on component VNodes during patch

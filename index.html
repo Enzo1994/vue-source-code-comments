@@ -19,6 +19,15 @@
             template:
               '<div><slot name="testSlot" :count="count"/><button v-on:click="count++">You clicked me {{ count }} times.</button></div>',
           });
+          var Comp2 = Vue.component("button-counter2", {
+            data: function () {
+              return {
+                count: 0,
+              };
+            },
+            template:
+              '<div><slot name="testSlot" :count="count"/><button v-on:click="count++">222You clicked me {{ count }} times.</button></div>',
+          });
       // var Comp = Vue.component("button-counter", function (resolve, reject) {
       //   setTimeout(function () {
       //     // 向 `resolve` 回调传递组件定义
@@ -35,7 +44,10 @@
       // });
 
       const vm = new Vue({
-        template: `<div><Comp><template v-slot:testSlot="slotProps"><div>{{slotProps.count}}</div></template></Comp>
+        template: `<div>
+          <keep-alive>
+            <component :is="componentVar"/>
+            </keep-alive>
           </div>`,
         // `<div>asdf
         //   <ul class="ul-cls" @hook:mounted="a">
@@ -44,6 +56,7 @@
         //   </div>`,
         el: "#app",
         data: {
+          componentVar:'Comp',
           abc: 123,
           bcd: 123,
           // list:[{s:'A'},{s:'B'},{s:'C'}]
@@ -79,6 +92,8 @@
      
         },
         mounted() {
+          console.log('mounted')
+          this.componentVar = 'Comp2'
           // this.list = [{s:'B'},{s:'C'},{s:'E'},{s:'A'}]
           // this.list = [
           //   { s: "B" },
@@ -110,7 +125,8 @@
           // }
         },
         components: {
-          Comp
+          Comp,
+          Comp2
         },
       });
     </script>
