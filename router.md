@@ -6,8 +6,8 @@
 ## 跳转流程：
 VueRouter.prototype.push => this.history.push => this.transitionTo => this.confirmTransition
 
-## confirmTransition:
-比对新旧路由对象是否相同 
+跳转路径(to)会匹配到路由表里某个元素
+## transitionTo:
 
 ## router.resolve:
 

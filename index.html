@@ -35,7 +35,7 @@
       }, components:{SecondLevelFoo}, beforeRouteLeave(to, from, next){console.log(666), next()}}
 
       const Bar = { template: '<div>bar</div>' ,beforeRouteLeave(to, from, next){console.log(777), next()}}
-      const Doe = { template: '<div>doe</div>' }
+      const Doe = { template: '<div>doe</div>',beforeRouteEnter(to, from, next){next(console.log)} }
 
       // 2. Define some routes
       // Each route should map to a component. The "component" can

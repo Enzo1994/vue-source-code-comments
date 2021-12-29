@@ -1334,13 +1334,11 @@
   };
   
   History.prototype.transitionTo = function transitionTo (location, cb) {
-      var this$1 = this;
-  
     var route = this.router.match(location, this.current)
-    this.confirmTransition(route, function () {
-      this$1.updateRoute(route)
+    this.confirmTransition(route, () => {
+      this.updateRoute(route)
       cb && cb(route)
-      this$1.ensureURL()
+      this.ensureURL()
     })
   };
   
@@ -1352,34 +1350,34 @@
     }
   
     var ref = resolveQueue(this.current.matched, route.matched);  // 解析出当前路由 matched 和将要跳转的路由的 matched 信息
-      var deactivated = ref.deactivated;  // 离开的那个路由，非激活状态
-      var activated = ref.activated;    // 目的地路由
-  
+    var deactivated = ref.deactivated;  // 离开的那个路由，非激活状态
+    var activated = ref.activated;    // 目的地路由
+
     function extractLeaveGuards (matched) {
       return flatten(flatMapComponents(matched, function (def, instance) {
         var guard = extractGuard(def, 'beforeRouteLeave')
         if (guard) {
           return Array.isArray(guard)
-            ? guard.map(function (guard) { return wrapLeaveGuard(guard, instance); })
+            ? guard.map(guard => wrapLeaveGuard(guard, instance))
             : wrapLeaveGuard(guard, instance)
         }
       }).reverse())
-
     }
     /**
      * 拼出需要调用的队列包括
-     * 1. 出发组件的beforeRouteLeave 钩子
-     * 2. 全局 beforeHooks
-     * 3. 目的组件的 beforeEnter 钩子
+     * 1. 跳转前组件的 beforeRouteLeave 钩子
+     * 2. 全局守卫 beforeHooks => beforeEach
+     * 3. 路由独享守卫 beforeEnter 钩子
      * 4. 异步目的组件的创建
+     * 注：没有触发 beforeRouteEnter
      *  */ 
     var queue = [].concat(
       // in-component leave guards
       extractLeaveGuards(deactivated),
-      // global before hooks
+      // global before hooks 
       this.router.beforeHooks,
       // enter guards
-      activated.map(function (m) { return m.beforeEnter; }),
+      activated.map(m => m.beforeEnter),
       // async components
       resolveAsyncComponents(activated)
     )
@@ -1406,7 +1404,7 @@
      * 1. 如果当前元素有值，就用 fn 调用一下
      * 2. 如果超过队列长度，执行回调
      * 3. 如果当前队列是空，直接跳过
-     * 4. 下一个元素递归放回调里
+     * 4. 下一个元素递归调用放回调里
      */
     function runQueue (queue, fn /** 单个元素执行 */, cb /** 全部执行完再执行 */) {
       step(0)
@@ -1429,9 +1427,8 @@
     // 每个元素执行下 iterator 全部执行完毕调用回调
     runQueue(queue, iterator,  () => {
       var postEnterCbs = []
-      var enterGuards = extractEnterGuards(activated, postEnterCbs, function () {
-        return this.current === route
-      })
+      // 处理组件的 befourRouteEnter 钩子
+      var enterGuards = extractEnterGuards(activated, postEnterCbs, () => this.current === route)
       // wait until async components are resolved before
       // extracting in-component enter guards
       runQueue(enterGuards, iterator, () => {
@@ -1439,9 +1436,8 @@
           this.pending = null
           cb(route)
           if (this.router.app) {
-            this.router.app.$nextTick(function () {
-              postEnterCbs.forEach(function (cb) { return cb(); })
-            })
+            debugger
+            this.router.app.$nextTick(() => postEnterCbs.forEach(cb => cb()))
           }
         }
       })
@@ -1456,9 +1452,10 @@
       return flatten(flatMapComponents(matched, function (def, _, match, key) {
         var guard = extractGuard(def, 'beforeRouteEnter')
         if (guard) {
-          return Array.isArray(guard)
-            ? guard.map(function (guard) { return wrapEnterGuard(guard, cbs, match, key, isValid); })
-            : wrapEnterGuard(guard, cbs, match, key, isValid)
+          return guard.map(guard => wrapEnterGuard(guard, cbs, match, key, isValid))
+          // return Array.isArray(guard)
+          //   ? guard.map(guard => wrapEnterGuard(guard, cbs, match, key, isValid))
+          //   : wrapEnterGuard(guard, cbs, match, key, isValid)
         }
       }))
     }
@@ -1468,9 +1465,7 @@
     var prev = this.current
     this.current = route
     this.cb && this.cb(route)
-    this.router.afterHooks.forEach(function (hook) {
-      hook && hook(route, prev)
-    })
+    this.router.afterHooks.forEach(hook => hook && hook(route, prev))
   };
   
   function normalizeBase (base) {
@@ -1540,14 +1535,16 @@
     return function routeEnterGuard (to, from, next) {
       return guard(to, from, function (cb) {
         next(cb)
-        if (typeof cb === 'function') {
+        if (typeof cb === 'function') { 
           cbs.push(function () {
             // #750
             // if a router-view is wrapped with an out-in transition,
             // the instance may not have been registered at this time.
             // we will need to poll for registration until current route
             // is no longer valid.
-            poll(cb, match.instances, key, isValid)
+            // poll(cb, match.instances, key, isValid)
+            debugger
+            cb(match.instances[key])
           })
         }
       })
@@ -1892,56 +1889,6 @@
   /*  */
   
   
-  var AbstractHistory = (function (History) {
-    function AbstractHistory (router) {
-      History.call(this, router)
-      this.stack = []
-      this.index = -1
-    }
-  
-    if ( History ) AbstractHistory.__proto__ = History;
-    AbstractHistory.prototype = Object.create( History && History.prototype );
-    AbstractHistory.prototype.constructor = AbstractHistory;
-  
-    AbstractHistory.prototype.push = function push (location) {
-      var this$1 = this;
-  
-      this.transitionTo(location, function (route) {
-        this$1.stack = this$1.stack.slice(0, this$1.index + 1).concat(route)
-        this$1.index++
-      })
-    };
-  
-    AbstractHistory.prototype.replace = function replace (location) {
-      var this$1 = this;
-  
-      this.transitionTo(location, function (route) {
-        this$1.stack = this$1.stack.slice(0, this$1.index).concat(route)
-      })
-    };
-  
-    AbstractHistory.prototype.go = function go (n) {
-      var this$1 = this;
-  
-      var targetIndex = this.index + n
-      if (targetIndex < 0 || targetIndex >= this.stack.length) {
-        return
-      }
-      var route = this.stack[targetIndex]
-      this.confirmTransition(route, function () {
-        this$1.index = targetIndex
-        this$1.updateRoute(route)
-      })
-    };
-  
-    AbstractHistory.prototype.ensureURL = function ensureURL () {
-      // noop
-    };
-  
-    return AbstractHistory;
-  }(History));
-  
-  /*  */
   
   var VueRouter = function VueRouter (options) {
     if ( options === void 0 ) options = {};
@@ -1957,9 +1904,6 @@
     if (this.fallback) {
       mode = 'hash'
     }
-    if (!inBrowser) {
-      mode = 'abstract'
-    }
     this.mode = mode
   
     switch (mode) {
@@ -1968,9 +1912,6 @@
         break
       case 'hash':
         this.history = new HashHistory(this, options.base, this.fallback)
-        break
-      case 'abstract':
-        this.history = new AbstractHistory(this)
         break
       default:
         "development" !== 'production' && assert(false, ("invalid mode: " + mode))
