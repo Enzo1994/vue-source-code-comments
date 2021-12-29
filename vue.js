@@ -2946,6 +2946,144 @@
     target._p = prependModifier;
   }
 
+  function FunctionalRenderContext (
+    data,
+    props,
+    children,
+    parent,
+    Ctor
+  ) {
+    var this$1 = this;
+
+    var options = Ctor.options;
+    // ensure the createElement function in functional components
+    // gets a unique context - this is necessary for correct named slot check
+    var contextVm;
+    if (hasOwn(parent, '_uid')) {
+      contextVm = Object.create(parent);
+      // $flow-disable-line
+      contextVm._original = parent;
+    } else {
+      // the context vm passed in is a functional context as well.
+      // in this case we want to make sure we are able to get a hold to the
+      // real context instance.
+      contextVm = parent;
+      // $flow-disable-line
+      parent = parent._original;
+    }
+    var isCompiled = isTrue(options._compiled);
+    var needNormalization = !isCompiled;
+
+    this.data = data;
+    this.props = props;
+    this.children = children;
+    this.parent = parent;
+    this.listeners = data.on || emptyObject;
+    this.injections = resolveInject(options.inject, parent);
+    this.slots = function () {
+      if (!this$1.$slots) {
+        normalizeScopedSlots(
+          data.scopedSlots,
+          this$1.$slots = resolveSlots(children, parent)
+        );
+      }
+      return this$1.$slots
+    };
+
+    Object.defineProperty(this, 'scopedSlots', ({
+      enumerable: true,
+      get: function get () {
+        return normalizeScopedSlots(data.scopedSlots, this.slots())
+      }
+    }));
+
+    // support for compiled functional template
+    if (isCompiled) {
+      // exposing $options for renderStatic()
+      this.$options = options;
+      // pre-resolve slots for renderSlot()
+      this.$slots = this.slots();
+      this.$scopedSlots = normalizeScopedSlots(data.scopedSlots, this.$slots);
+    }
+
+    if (options._scopeId) {
+      this._c = function (a, b, c, d) {
+        var vnode = createElement(contextVm, a, b, c, d, needNormalization);
+        if (vnode && !Array.isArray(vnode)) {
+          vnode.fnScopeId = options._scopeId;
+          vnode.fnContext = parent;
+        }
+        return vnode
+      };
+    } else {
+      this._c = function (a, b, c, d) { return createElement(contextVm, a, b, c, d, needNormalization); };
+    }
+  }
+
+  installRenderHelpers(FunctionalRenderContext.prototype);
+
+  function createFunctionalComponent (
+    Ctor,
+    propsData,
+    data,
+    contextVm,
+    children
+  ) {
+    var options = Ctor.options;
+    var props = {};
+    var propOptions = options.props;
+    if (isDef(propOptions)) {
+      for (var key in propOptions) {
+        props[key] = validateProp(key, propOptions, propsData || emptyObject);
+      }
+    } else {
+      if (isDef(data.attrs)) { mergeProps(props, data.attrs); }
+      if (isDef(data.props)) { mergeProps(props, data.props); }
+    }
+
+    var renderContext = new FunctionalRenderContext(
+      data,
+      props,
+      children,
+      contextVm,
+      Ctor
+    );
+
+    var vnode = options.render.call(null, renderContext._c, renderContext);
+
+    if (vnode instanceof VNode) {
+      return cloneAndMarkFunctionalResult(vnode, data, renderContext.parent, options, renderContext)
+    } else if (Array.isArray(vnode)) {
+      var vnodes = normalizeChildren(vnode) || [];
+      var res = new Array(vnodes.length);
+      for (var i = 0; i < vnodes.length; i++) {
+        res[i] = cloneAndMarkFunctionalResult(vnodes[i], data, renderContext.parent, options, renderContext);
+      }
+      return res
+    }
+  }
+
+  function cloneAndMarkFunctionalResult (vnode, data, contextVm, options, renderContext) {
+    // #7817 clone node before setting fnContext, otherwise if the node is reused
+    // (e.g. it was from a cached normal slot) the fnContext causes named slots
+    // that should not be matched to match.
+    var clone = cloneVNode(vnode);
+    clone.fnContext = contextVm;
+    clone.fnOptions = options;
+    {
+      (clone.devtoolsMeta = clone.devtoolsMeta || {}).renderContext = renderContext;
+    }
+    if (data.slot) {
+      (clone.data || (clone.data = {})).slot = data.slot;
+    }
+    return clone
+  }
+
+  function mergeProps (to, from) {
+    for (var key in from) {
+      to[camelize(key)] = from[key];
+    }
+  }
 
   // inline hooks to be invoked on component VNodes during patch
   var componentVNodeHooks = {
@@ -2957,7 +3095,7 @@
       ) {
         // kept-alive components, treat as a patch
         var mountedNode = vnode; // work around flow
-        componentVNodeHooks.prepatch(mountedNode, mountedNode);
+        componentVNodeHooks.prepatch(mountedNode, mountedNode);  // keep-alive 组件,只更新组件的子组件
       } else {
         var child = vnode.componentInstance = createComponentInstanceForVnode(
           vnode,  // 这个就是_parentVnode, 组件占位节点
@@ -3069,6 +3207,10 @@
     // extract props
     var propsData = extractPropsFromVNodeData(data, Ctor, tag);
 
+    // functional component
+    if (isTrue(Ctor.options.functional)) {
+      return createFunctionalComponent(Ctor, propsData, data, context, children)
+    }
     // extract listeners, since these needs to be treated as
     // child component listeners instead of DOM listeners
     var listeners = data.on;
@@ -3905,6 +4047,7 @@
     return false
   }
 
+  // 激活子组件
   function activateChildComponent (vm, direct) {
     if (direct) {
       vm._directInactive = false;
@@ -4934,7 +5077,7 @@
 
   var KeepAlive = {
     name: 'keep-alive',
-    abstract: true,
+    abstract: true,  // 为了让 vue 跳过这个组件
 
     props: {
       include: patternTypes,
@@ -5005,7 +5148,7 @@
           keys.push(key);
           // prune oldest entry
           if (this.max && keys.length > parseInt(this.max)) {
-            pruneCacheEntry(cache, keys[0], keys, this._vnode);
+            pruneCacheEntry(cache, keys[0], keys, this._vnode); //超过缓存数限制，将第一个删除
           }
         }
 
@@ -5486,6 +5629,7 @@
     }
 
     function createRmCb (childElm, listeners) {
+      // keep-aliv 被替换的时候删除缓存了的节点
       function remove$$1 () {
         if (--remove$$1.listeners === 0) {
           removeNode(childElm);
@@ -5590,6 +5734,7 @@
           initComponent(vnode, insertedVnodeQueue);
           insert(parentElm, vnode.elm, refElm);
           if (isTrue(isReactivated)) {
+            // 如果是 keepalive, 只激活不挂载
             reactivateComponent(vnode, insertedVnodeQueue, parentElm, refElm);
           }
           return true
@@ -5615,6 +5760,7 @@
       }
     }
 
+    // 已缓存组件的处理
     function reactivateComponent (vnode, insertedVnodeQueue, parentElm, refElm) {
       var i;
       // hack for #4339: a reactivated component with inner transition
@@ -5626,7 +5772,7 @@
         innerNode = innerNode.componentInstance._vnode;
         if (isDef(i = innerNode.data) && isDef(i = i.transition)) {
           for (i = 0; i < cbs.activate.length; ++i) {
-            cbs.activate[i](emptyNode, innerNode);
+            cbs.activate[i](emptyNode, innerNode);  // 执行 activate 的钩子
           }
           insertedVnodeQueue.push(innerNode);
           break
@@ -5736,6 +5882,7 @@
       for (; startIdx <= endIdx; ++startIdx) {
         var ch = vnodes[startIdx];
         if (isDef(ch)) {
+          // 有 slot:
           if (isDef(ch.tag)) {
             removeAndInvokeRemoveHook(ch);
             invokeDestroyHook(ch);
@@ -5946,7 +6093,7 @@
       var data = vnode.data; 
 
       if (isDef(data) && isDef(i = data.hook) && isDef(i = i.prepatch)) {
-        i(oldVnode, vnode);  // 这里执行prepatch
+        i(oldVnode, vnode);  // 执行 prepatch
       }
 
       var oldCh = oldVnode.children;
@@ -6188,7 +6335,7 @@
 
           // destroy old node
           if (isDef(parentElm)) {
-            removeVnodes([oldVnode], 0, 0);
+            removeVnodes([oldVnode], 0, 0); // 删除旧节点,
           } else if (isDef(oldVnode.tag)) {
             invokeDestroyHook(oldVnode);
           }
@@ -7152,6 +7299,7 @@
   // safe to exclude.
   var useMicrotaskFix = isUsingMicroTask && !(isFF && Number(isFF[1]) <= 53);
 
+  // (event.name, cur, event.capture, event.passive, event.params)
   function add$1 (
     name,
     handler,

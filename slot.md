@@ -1,13 +1,8 @@
-## 流程
-1. 解析组件的时候，存下组件标签的子节点
-2. _init方法里，子组件的children被存成_renderChildren
-3. initRender中，组件的 $slot 被设置为刚刚解析到的组件的 children
-4. 解析组件内部的`<slot/>`标签时候，会被解析为`_t("default")`
-5. 触发renderSlot方法，
-
+## 核心：
+1. 在执行子组件render函数之前，从组件的占位节点_parentVnode中拿到slots插头节点
 ## 代码：
-1. 插头通过 genData$2 方法写入
-2. 插槽通过 genSlot 写入
+1. 插头通过 genData$2 方法写入 render函数
+2. 插槽通过 genSlot 写入 render函数
 ## 写入阶段流程:
 1. processSlotContent 读取到的模板AST数据:
     ```js
