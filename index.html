@@ -1,74 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
-  </head>
-  <body>
-    <div id="app">
-      <h1>Hello App!</h1>
-      <p>
-        <!-- 使用 router-link 组件来导航. -->
-        <!-- 通过传入 `to` 属性指定链接. -->
-        <!-- <router-link> 默认会被渲染成一个 `<a>` 标签 -->
-        <router-link to="/foo/">Go to Foo</router-link>
-        <router-link to="/bar">Go to Bar</router-link>
-        <router-link to="/doe">Go to Doe</router-link>
-      </p>
-      <!-- 路由出口 -->
-      <!-- 路由匹配到的组件将渲染在这里 -->
-      <router-view></router-view>
-    </div>
-    <script src="./vue.js"></script>
-    <!-- <script src="https://unpkg.com/vue/dist/vue.js"></script> -->
 
-    <script src="./vue-router2.0.js"></script>
-    <script>
-      // 0. If using a module system, call Vue.use(VueRouter)
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Document</title>
+</head>
 
-      // 1. Define route components.
-      // These can be imported from other files
-      const SecondLevelFoo = { template: '<div>SecondLevelFoo</div>',beforeRouteLeave(to, from, next){console.log(777), next()}}
-      const Foo = { template: '<div>foo<router-view/></div>', mounted(){
+<body>
+  <div id="app">
+    <h1>Hello App!</h1>
+    <p>
+      <!-- 使用 router-link 组件来导航. -->
+      <!-- 通过传入 `to` 属性指定链接. -->
+      <!-- <router-link> 默认会被渲染成一个 `<a>` 标签 -->
+      <router-link to="/foo">Go to Foo</router-link>
+      <router-link to="/bar">Go to Bar</router-link>
+      <router-link to="/doe">Go to Doe</router-link>
+      <router-link to="/foo/secondFoo">Go to SecondFoo</router-link>
+    </p>
+    <!-- 路由出口 -->
+    <!-- 路由匹配到的组件将渲染在这里 -->
+    <router-view></router-view>
+  </div>
+  <script src="./vue.js"></script>
+  <!-- <script src="https://unpkg.com/vue/dist/vue.js"></script> -->
+
+  <script src="./vue-router2.0.js"></script>
+  <script>
+    // 0. If using a module system, call Vue.use(VueRouter)
+
+    // 1. Define route components.
+    // These can be imported from other files
+    const SecondLevelFoo = {  template: '<div>SecondLevelFoo</div>', beforeRouteLeave(to, from, next) { console.log(777), next() } }
+    const Foo = {
+      name: 'Foo',
+      template: '<div>foo<router-view/></div>', mounted() {
         console.log(this.$route)
-      }, components:{SecondLevelFoo}, beforeRouteLeave(to, from, next){console.log(666), next()}}
+      }, components: { SecondLevelFoo }, beforeRouteLeave(to, from, next) { console.log(666), next() }
+    }
 
-      const Bar = { template: '<div>bar</div>' ,beforeRouteLeave(to, from, next){console.log(777), next()}}
-      const Doe = { template: '<div>doe</div>',beforeRouteEnter(to, from, next){next(console.log)} }
+    const Bar = { name: 'Bar', template: '<div>bar</div>', beforeRouteLeave(to, from, next) { console.log(777), next() } }
+    const Doe = { name: 'Doe', template: '<div>doe</div>', beforeRouteEnter(to, from, next) { next(console.log) } }
 
-      // 2. Define some routes
-      // Each route should map to a component. The "component" can
-      // either be an actual component constructor created via
-      // Vue.extend(), or just a component options object.
-      // We'll talk about nested routes later.
-      const routes = [
-        { path: '/foo', component: Foo },
-        { path: '/foo/secondFoo', component: SecondLevelFoo },
-        { path: '/bar', component: Bar },
-        { path: '/doe', component: Doe }
-      ]
+    // 2. Define some routes
+    // Each route should map to a component. The "component" can
+    // either be an actual component constructor created via
+    // Vue.extend(), or just a component options object.
+    // We'll talk about nested routes later.
+    const routes = [
+      {
+        path: '/foo', component: Foo, children: [
+          { path: 'secondFoo', component: SecondLevelFoo },
+        ]
+      },
+      { path: '/bar', component: Bar },
+      { path: '/doe', component: Doe }
+    ]
 
-      // 3. Create the router instance and pass the `routes` option
-      // You can pass in additional options here, but let's
-      // keep it simple for now.
-      const router = new VueRouter({
-        routes
-      })
+    // 3. Create the router instance and pass the `routes` option
+    // You can pass in additional options here, but let's
+    // keep it simple for now.
+    const router = new VueRouter({
+      routes
+    })
 
-      // 4. Create and mount the root instance.
-      // Make sure to inject the router with the router option to make the
-      // whole app router-aware.
-      const app = new Vue({
-        router
-      }).$mount('#app')
+    // 4. Create and mount the root instance.
+    // Make sure to inject the router with the router option to make the
+    // whole app router-aware.
+    const app = new Vue({
+      router
+    }).$mount('#app')
 
       // Now the app has started!
-    </script>
+  </script>
 
 
 
-    <!-- <script>
+  <!-- <script>
       var Comp = Vue.component("button-counter", {
         data: function () {
           return {
@@ -211,5 +220,6 @@
 
       });
     </script> -->
-  </body>
+</body>
+
 </html>

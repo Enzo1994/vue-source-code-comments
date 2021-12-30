@@ -19,6 +19,7 @@
       }
     },
     render: function render (h, ref) {
+      debugger
       var props = ref.props;
       var children = ref.children;
       var parent = ref.parent;
@@ -32,7 +33,7 @@
       var inactive = false
   
       while (parent) {
-        if (parent.$vnode && parent.$vnode.data.routerView) {
+        if (parent.$vnode && parent.$vnode.data.routerView) { // 跟组件没有$vnode
           depth++
         }
         if (parent._inactive) {
@@ -401,7 +402,7 @@
     _Vue = Vue
   
     Object.defineProperty(Vue.prototype, '$router', {
-      get: function get () { return this.$root._router }
+      get: function get () {debugger; return this.$root._router;  }
     })
   
     Object.defineProperty(Vue.prototype, '$route', {
@@ -1436,7 +1437,6 @@
           this.pending = null
           cb(route)
           if (this.router.app) {
-            debugger
             this.router.app.$nextTick(() => postEnterCbs.forEach(cb => cb()))
           }
         }
