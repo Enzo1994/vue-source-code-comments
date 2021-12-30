@@ -201,7 +201,11 @@
   var START = createRoute(null, {
     path: '/'
   })
-  
+  /**
+   * 沿着路由线路一直往父节点匹配，把所有父辈节点存入 match 中
+   * @param {*} record 
+   * @returns 
+   */
   function formatMatch (record) {
     var res = []
     while (record) {
@@ -411,9 +415,9 @@
   
     Vue.mixin({
       beforeCreate: function beforeCreate () {
-        if (this.$options.router) {
-          this._router = this.$options.router
-          this._router.init(this)
+        if (this.$options.router) {  // 只有根组件有这个参数
+          this._router = this.$options.router  // VueRouter 实例，也就是 new Vue 时候传入的 router
+          this._router.init(this)  // VueRouter.prototype.init(this)
           Vue.util.defineReactive(this, '_route', this._router.history.current)
         }
       }
@@ -1133,7 +1137,8 @@
       currentRoute,
       redirectedFrom
     ) {
-      var location = normalizeLocation(raw, currentRoute)
+      debugger
+      var location = normalizeLocation(raw, currentRoute) // to 值的序列化路由
       var name = location.name;
   
       if (name) {
@@ -1267,6 +1272,7 @@
     return match
   }
   
+  /** 那这当前 to 值路径去和拍平了的路由表pathMap一个一个对比 */
   function matchRoute (
     path,
     params,
@@ -1316,17 +1322,11 @@
   })()
   
   /*  */
-  
-
-  
-  /*  */
-  
-  
   var History = function History (router, base) {
     this.router = router
     this.base = normalizeBase(base)
     // start with a route object that stands for "nowhere"
-    this.current = START
+    this.current = START // 初始路径为'/'
     this.pending = null
   };
   
@@ -1335,7 +1335,7 @@
   };
   
   History.prototype.transitionTo = function transitionTo (location, cb) {
-    var route = this.router.match(location, this.current)
+    var route = this.router.match(location, this.current)  // 先去匹配路由
     this.confirmTransition(route, () => {
       this.updateRoute(route)
       cb && cb(route)
@@ -1462,10 +1462,10 @@
   };
   
   History.prototype.updateRoute = function updateRoute (route) {
-    var prev = this.current
-    this.current = route
+    var prev = this.current 
+    this.current = route  // 更新 this.current
     this.cb && this.cb(route)
-    this.router.afterHooks.forEach(hook => hook && hook(route, prev))
+    this.router.afterHooks.forEach(hook => hook && hook(route, prev)) // 触发 after 路由钩子
   };
   
   function normalizeBase (base) {
@@ -1793,13 +1793,9 @@
   
   
   var HashHistory = (function (History) {
-    function HashHistory (router, base, fallback) {
-      var this$1 = this;
-  
+    function HashHistory (router, base, fallback) {  
       History.call(this, router, base)
-      window.addEventListener('hashchange', function () {
-        this$1.onHashChange()
-      })
+      window.addEventListener('hashchange', () => this.onHashChange())
   
       // check history fallback deeplinking
       if (fallback && this.checkFallback()) {
@@ -1893,29 +1889,16 @@
   var VueRouter = function VueRouter (options) {
     if ( options === void 0 ) options = {};
   
-    this.app = null
-    this.options = options
-    this.beforeHooks = []
-    this.afterHooks = []
-    this.match = createMatcher(options.routes || [])
-  
-    var mode = options.mode || 'hash'
-    this.fallback = mode === 'history' && !supportsHistory
-    if (this.fallback) {
-      mode = 'hash'
-    }
-    this.mode = mode
-  
-    switch (mode) {
-      case 'history':
-        this.history = new HTML5History(this, options.base)
-        break
-      case 'hash':
-        this.history = new HashHistory(this, options.base, this.fallback)
-        break
-      default:
-        "development" !== 'production' && assert(false, ("invalid mode: " + mode))
-    }
+    this.app = null // Vue 根实例
+    this.options = options  // 路由配置表
+    this.beforeHooks = []  // 钩子
+    this.afterHooks = []  // 钩子
+    this.match = createMatcher(options.routes || [])  // 路由匹配器
+    this.fallback = false
+    this.mode = options.mode || 'hash'
+    this.history = this.mode === 'history' ?  // 路由历史的具体实例
+      new HTML5History(this, options.base) :
+      new HashHistory(this, options.base, this.fallback)
   };
   
   var prototypeAccessors = { currentRoute: {} };
@@ -1925,7 +1908,6 @@
   };
   
   VueRouter.prototype.init = function init (app /* Vue component instance */) {
-      var this$1 = this;
   
     "development" !== 'production' && assert(
       install.installed,
@@ -1933,19 +1915,17 @@
       "before creating root instance."
     )
   
-    this.app = app
+    this.app = app  // 找到了根实例
   
     var history = this.history
   
     if (history instanceof HTML5History) {
       history.transitionTo(getLocation(history.base))
     } else if (history instanceof HashHistory) {
-      history.transitionTo(getHash())
+      history.transitionTo(getHash()/** # 后面的内容 */)  // 去到指定路由
     }
   
-    history.listen(function (route) {
-      this$1.app._route = route
-    })
+    history.listen(route => (this.app._route = route) /** history.cb */)
   };
   
   VueRouter.prototype.beforeEach = function beforeEach (fn) {
