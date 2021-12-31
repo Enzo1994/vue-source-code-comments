@@ -27,16 +27,15 @@
   
       data.routerView = true
   
-      var route = parent.$route
+      var route = parent.$route  // $route里存了matched数组，
       var cache = parent._routerViewCache || (parent._routerViewCache = {})
       var depth = 0
       var inactive = false
-  
       while (parent) {
-        if (parent.$vnode && parent.$vnode.data.routerView) { // 跟组件没有$vnode
+        if (parent.$vnode && parent.$vnode.data.routerView) {  // 找到当前router-view组件所在层级
           depth++
         }
-        if (parent._inactive) {
+        if (parent._inactive) {  
           inactive = true
         }
         parent = parent.$parent
@@ -49,11 +48,13 @@
       }
   
       var name = props.name
-      var component = inactive
+      var component = inactive  // 从matched数组拿到当前层的对应组件
         ? cache[name]
         : (cache[name] = matched.components[name])
   
-      if (!inactive) {
+      // determine current view depth, also check to see if the tree
+      // has been toggled inactive but kept-alive.
+      if (!inactive) {  // 如果当前context属于未激活状态
         var hooks = data.hook || (data.hook = {})
         hooks.init = function (vnode) {
           matched.instances[name] = vnode.child
