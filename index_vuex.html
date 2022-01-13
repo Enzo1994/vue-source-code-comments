@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+
+  <body>
+    <div id="app"></div>
+    <script src="./vue.js"></script>
+    <script src="./vuex3.0.js"></script>
+
+    <script>
+      const moduleA = {
+        state: ()=>({count:0}),
+        mutations: {
+          increment(state) {
+            state.count++;
+          },
+        },
+      };
+
+      const store = new Vuex.Store({
+        modules: {
+          a: moduleA,
+        },
+      });
+      const vm = new Vue({
+        template: `<div>{{$store.state.count}} <button @click="add">add</button></div>`,
+        store,
+        el: "#app",
+        methods: {
+          add() {
+            this.$store.commit("increment");
+          },
+        },
+      });
+    </script>
+
+    <!--<script>
+    // 0. If using a module system, call Vue.use(VueRouter)
+
+    // 1. Define route components.
+    // These can be imported from other files
+    const SecondLevelFoo = {  template: '<div>SecondLevelFoo</div>', beforeRouteLeave(to, from, next) { console.log(777), next() } }
+    const Foo = {
+      name: 'Foo',
+      template: '<div>foo<router-view/></div>', mounted() {
+        console.log(this.$route)
+      }, components: { SecondLevelFoo }, beforeRouteLeave(to, from, next) { console.log(666), next() }
+    }
+
+    const Bar = { name: 'Bar', template: '<div>bar</div>', beforeRouteLeave(to, from, next) { console.log(777), next() } }
+    const Doe = { name: 'Doe', template: '<div>doe</div>', beforeRouteEnter(to, from, next) { next(console.log) } }
+
+    // 2. Define some routes
+    // Each route should map to a component. The "component" can
+    // either be an actual component constructor created via
+    // Vue.extend(), or just a component options object.
+    // We'll talk about nested routes later.
+    const routes = [
+      {
+        path: '/foo', component: Foo, children: [
+          { path: 'secondFoo', component: SecondLevelFoo },
+        ]
+      },
+      { path: '/bar', component: Bar },
+      { path: '/doe', component: Doe }
+    ]
+
+    // 3. Create the router instance and pass the `routes` option
+    // You can pass in additional options here, but let's
+    // keep it simple for now.
+    const router = new VueRouter({
+      routes
+    })
+
+    // 4. Create and mount the root instance.
+    // Make sure to inject the router with the router option to make the
+    // whole app router-aware.
+    const app = new Vue({
+      router
+    }).$mount('#app')
+
+      // Now the app has started!
+  </script> -->
+
+    <!-- <script>
+      var Comp = Vue.component("button-counter", {
+        data: function () {
+          return {
+            count: 0,
+          };
+        },
+        template:
+          '<div><slot name="testSlot" :count="count"/><button v-on:click="count++">You clicked me {{ count }} times.</button></div>',
+      });
+      var Comp2 = Vue.component("button-counter2", {
+        data: function () {
+          return {
+            count: 0,
+          };
+        },
+        template:
+          '<div><slot name="testSlot" :count="count"/><button v-on:click="count++">222You clicked me {{ count }} times.</button></div>',
+      });
+      // var Comp = Vue.component("button-counter", function (resolve, reject) {
+      //   setTimeout(function () {
+      //     // 向 `resolve` 回调传递组件定义
+      //     resolve({
+      //       data: function () {
+      //         return {
+      //           count: 0,
+      //         };
+      //       },
+      //       template:
+      //         '<div><slot name="testSlot" :count="count"/><button v-on:click="count++">You clicked me {{ count }} times.</button></div>',
+      //     });
+      //   }, 1000);
+      // });
+
+      const routes = [
+        { path: '/foo', component: Comp },
+        { path: '/bar', component: Comp2 }
+      ]
+
+
+      var router = new VueRouter({routes})
+      console.log('router', router);
+      const app = new Vue({
+        router
+      }).$mount('#app')
+      const vm = new Vue({
+        template:
+        `<div>  <router-view></router-view>
+</div>`,
+        // `<div>
+        //   <keep-alive>
+        //     <component :is="componentVar"/>
+        //     </keep-alive>
+        //   </div>`,
+        //  `<div><Comp><template v-slot:testSlot="slotProps"><div>{{slotProps.count}}</div></template></Comp>
+        //  </div>`,
+
+        // `<div>asdf
+        //   <ul class="ul-cls" @hook:mounted="a">
+        //     <li v-for="item of list" :key="item.s" class="test-cls" alt="777">{{item.s}}</li>
+        //   </ul>
+        //   </div>`,
+        el: "#app",
+        data: {
+          componentVar:'Comp',
+          abc: 123,
+          bcd: 123,
+          // list:[{s:'A'},{s:'B'},{s:'C'}]
+          // list: [{ s: "A" }, { s: "B" }, { s: "C" }, { s: "D" }, { s: "E" }],
+          // obj: { a: 333 },
+        },
+        computed: {
+          // testObj() {
+          //   // debugger;
+          //   // console.log('computed')
+          //   // this.a = 34
+          //   return this.obj.a;
+          // },
+          // testObj2(){
+          //   return this.testObj
+          // }
+          // cbd(){
+          //   console.log('abccomputed变了')
+          //   return this.abc
+          // },
+        },
+        watch:{
+        //   'obj.a'(val){
+        //     debugger
+        //     console.log('watcher',val)
+        //   }
+        // bcd(){
+        //     console.log('bcd变了')
+        //   },
+        //   abc(){
+        //     console.log('abc变了')
+        //   },
+     
+        },
+        mounted() {
+          // console.log('mounted')
+          // this.componentVar = 'Comp2'
+          // setTimeout(()=> {
+          //   this.componentVar = 'Comp'
+          // },3000)
+          
+          // this.list = [{s:'B'},{s:'C'},{s:'E'},{s:'A'}]
+          // this.list = [
+          //   { s: "B" },
+          //   { s: "E" },
+          //   { s: "B" },
+          //   { s: "E" },
+          //   { s: "D" },
+          //   { s: "C" },
+          // ];
+          
+
+
+          // this.bcd = 4
+
+          // this.abc = 4
+          // setTimeout(() => (this.obj = 888), 10000);
+          console.log(this)
+          // this.obj.a = 888
+          // this.obj = {c:3}
+          // this.a = 66
+          // this.obj.a = 666
+          // setTimeout(()=>this.obj.a = 222, 5000)
+        },
+        
+        methods: {
+          // a(){
+          //   console.log(333)
+          // }
+        },
+        components: {
+          // Comp,
+          // Comp2
+        },
+        router,
+
+      });
+    </script> -->
+  </body>
+</html>

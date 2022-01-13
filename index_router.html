@@ -36,11 +36,11 @@
     const Foo = {
       name: 'Foo',
       template: '<div>foo<router-view/></div>', mounted() {
-        console.log(this.$route)
+        console.log(this.$options)
       }, components: { SecondLevelFoo }, beforeRouteLeave(to, from, next) { console.log(666), next() }
     }
 
-    const Bar = { name: 'Bar', template: '<div>bar</div>', beforeRouteLeave(to, from, next) { console.log(777), next() } }
+    const Bar = { name: 'Bar', template: '<div>bar</div>',mounted(){console.log(this.$options)}, beforeRouteLeave(to, from, next) { console.log(777), next() } }
     const Doe = { name: 'Doe', template: '<div>doe</div>', beforeRouteEnter(to, from, next) { next(console.log) } }
 
     // 2. Define some routes

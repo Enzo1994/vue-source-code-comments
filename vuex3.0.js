@@ -10,36 +10,24 @@
 }(this, (function () { 'use strict';
 
 var applyMixin = function (Vue) {
-  var version = Number(Vue.version.split('.')[0]);
 
-  if (version >= 2) {
-    Vue.mixin({ beforeCreate: vuexInit });
-  } else {
-    // override init and inject vuex init procedure
-    // for 1.x backwards compatibility.
-    var _init = Vue.prototype._init;
-    Vue.prototype._init = function (options) {
-      if ( options === void 0 ) options = {};
 
-      options.init = options.init
-        ? [vuexInit].concat(options.init)
-        : vuexInit;
-      _init.call(this, options);
-    };
-  }
+  Vue.mixin({ beforeCreate: vuexInit });
 
   /**
    * Vuex init hook, injected into each instances init hooks list.
+   * beforeCreate 做了什么？给每个层级的 this.$store 都设置为创建vue 实例时候传入的 options.store
    */
 
   function vuexInit () {
+    debugger
     var options = this.$options;
     // store injection
-    if (options.store) {
+    if (options.store) { // 说明是 Vue 根实例创建的时候传入的 store
       this.$store = typeof options.store === 'function'
         ? options.store()
         : options.store;
-    } else if (options.parent && options.parent.$store) {
+    } else if (options.parent && options.parent.$store) {  // 其他层级的组件，还是用的最初始的 options.sotre
       this.$store = options.parent.$store;
     }
   }
@@ -104,11 +92,13 @@ function assert (condition, msg) {
 }
 
 var Module = function Module (rawModule, runtime) {
+
+  debugger
   this.runtime = runtime;
-  this._children = Object.create(null);
-  this._rawModule = rawModule;
+  this._children = Object.create(null);  // 子模块
+  this._rawModule = rawModule;   // 模块 options
   var rawState = rawModule.state;
-  this.state = (typeof rawState === 'function' ? rawState() : rawState) || {};
+  this.state = (typeof rawState === 'function' ? rawState() : rawState) || {};  // 当前模块的 state
 };
 
 var prototypeAccessors$1 = { namespaced: { configurable: true } };
@@ -125,7 +115,7 @@ Module.prototype.removeChild = function removeChild (key) {
   delete this._children[key];
 };
 
-Module.prototype.getChild = function getChild (key) {
+Module.prototype.getChild = function getChild (key) {  // 私有属性通过 getter 方法访问
   return this._children[key]
 };
 
@@ -173,7 +163,7 @@ var ModuleCollection = function ModuleCollection (rawRootModule) {
 
 ModuleCollection.prototype.get = function get (path) {
   return path.reduce(function (module, key) {
-    return module.getChild(key)
+    return module._children[key]
   }, this.root)
 };
 
@@ -189,27 +179,31 @@ ModuleCollection.prototype.update = function update$1 (rawRootModule) {
   update([], this.root, rawRootModule);
 };
 
+/**
+ * 
+ * @param {*} path 构建模块树维护的路径
+ * @param {*} rawModule 定义模块的原始配置
+ * @param {*} runtime 是否是运行时创建的模块
+ */
 ModuleCollection.prototype.register = function register (path, rawModule, runtime) {
-    var this$1 = this;
-    if ( runtime === void 0 ) runtime = true;
+  if ( runtime === void 0 ) runtime = true;
 
   {
     assertRawModule(path, rawModule);
   }
 
   var newModule = new Module(rawModule, runtime);
-  if (path.length === 0) {
+  if (path.length === 0) {  // path 是模块路径，如果是 0 说明是根模块
     this.root = newModule;
-  } else {
-    var parent = this.get(path.slice(0, -1));
-    parent.addChild(path[path.length - 1], newModule);
+  } else {    // 其他层级的模块，创建父子关系（递归题）
+    var parent = this.get(path.slice(0, -1));  // 根据路径找到父模块
+    parent._children[path[path.length - 1]] = newModule;  // 调用父模块的 addChild 创建父子关系
   }
 
   // register nested modules
+  // 遍历+递归所有当前模块，为所有子模块创建父子关系
   if (rawModule.modules) {
-    forEachValue(rawModule.modules, function (rawChildModule, key) {
-      this$1.register(path.concat(key), rawChildModule, runtime);
-    });
+    forEachValue(rawModule.modules, (rawChildModule, key) => this.register(path.concat(key), rawChildModule, runtime));
   }
 };
 
@@ -294,20 +288,14 @@ function makeAssertionMessage (path, key, type, value, expected) {
 var Vue; // bind on install
 
 var Store = function Store (options) {
-  var this$1 = this;
+  debugger
   if ( options === void 0 ) options = {};
 
   // Auto install if it is not done yet and `window` has `Vue`.
   // To allow users to avoid auto-installation in some cases,
   // this code should be placed here. See #731
   if (!Vue && typeof window !== 'undefined' && window.Vue) {
-    install(window.Vue);
-  }
-
-  {
-    assert(Vue, "must call Vue.use(Vuex) before creating a store instance.");
-    assert(typeof Promise !== 'undefined', "vuex requires a Promise polyfill in this browser.");
-    assert(this instanceof Store, "Store must be called with the new operator.");
+    install(window.Vue); // 设置好每层组件的 $store
   }
 
   var plugins = options.plugins; if ( plugins === void 0 ) plugins = [];
@@ -324,7 +312,7 @@ var Store = function Store (options) {
   this._actionSubscribers = [];
   this._mutations = Object.create(null);
   this._wrappedGetters = Object.create(null);
-  this._modules = new ModuleCollection(options);
+  this._modules = new ModuleCollection(options);  // 模块处理
   this._modulesNamespaceMap = Object.create(null);
   this._subscribers = [];
   this._watcherVM = new Vue();
@@ -354,7 +342,7 @@ var Store = function Store (options) {
   resetStoreVM(this, state);
 
   // apply plugins
-  plugins.forEach(function (plugin) { return plugin(this$1); });
+  plugins.forEach((plugin) => plugin(this));
 
   if (Vue.config.devtools) {
     devtoolPlugin(this);
@@ -932,7 +920,6 @@ var index = {
   mapActions: mapActions,
   createNamespacedHelpers: createNamespacedHelpers
 };
-
 return index;
 
 })));
